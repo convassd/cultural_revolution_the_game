@@ -1,0 +1,24 @@
+{
+  "name": "local-card-duel",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "typecheck": "vue-tsc --noEmit",
+    "build": "npm run typecheck && vite build",
+    "preview": "vite preview --host 127.0.0.1",
+    "test": "vitest run",
+    "benchmark:ai": "node scripts/benchmark-ai.mjs"
+  },
+  "dependencies": {
+    "vue": "3.5.13"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "5.2.3",
+    "typescript": "5.8.2",
+    "vite": "6.2.3",
+    "vitest": "3.0.9",
+    "vue-tsc": "2.2.8"
+  }
+}

@@ -1,0 +1,79 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 360" role="img" aria-labelledby="title desc">
+  <title id="title">陈锡联 · 阵前</title>
+  <desc id="desc">原创矢量卡牌插画：陈锡联戴大檐军帽、着军服，窄眼与宽阔下颌，金色侧光，背景有山岭与火炮剪影，前景是展开的地图。</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="1" x2="1" y2="0"><stop stop-color="#101f29"/><stop offset=".55" stop-color="#37544c"/><stop offset="1" stop-color="#c0a16a"/></linearGradient>
+    <radialGradient id="halo" cx=".52" cy=".24" r=".72"><stop stop-color="#eaca82" stop-opacity=".75"/><stop offset=".52" stop-color="#71917a" stop-opacity=".2"/><stop offset="1" stop-color="#12252b" stop-opacity=".65"/></radialGradient>
+    <linearGradient id="coat" x2="1" y2=".5"><stop stop-color="#748568"/><stop offset=".4" stop-color="#435f4d"/><stop offset="1" stop-color="#203d3a"/></linearGradient>
+    <linearGradient id="skin" x1="0" y1=".3" x2="1" y2=".7"><stop stop-color="#ffe6aa"/><stop offset=".45" stop-color="#dda66f"/><stop offset=".75" stop-color="#b47658"/><stop offset="1" stop-color="#675145"/></linearGradient>
+    <linearGradient id="gold" x2=".4" y2="1"><stop stop-color="#fff0b2"/><stop offset=".5" stop-color="#cda559"/><stop offset="1" stop-color="#775c37"/></linearGradient>
+    <linearGradient id="hat" x2=".7" y2="1"><stop stop-color="#8e9772"/><stop offset=".4" stop-color="#57715a"/><stop offset="1" stop-color="#1a3835"/></linearGradient>
+    <linearGradient id="map" x2="0" y2="1"><stop stop-color="#dec88f"/><stop offset="1" stop-color="#8c8b64"/></linearGradient>
+    <radialGradient id="vignette"><stop offset=".57" stop-opacity="0"/><stop offset="1" stop-color="#0b1d27" stop-opacity=".7"/></radialGradient>
+    <filter id="grain"><feTurbulence type="fractalNoise" baseFrequency=".6" numOctaves="3" stitchTiles="stitch"/><feColorMatrix type="saturate" values="0"/><feComponentTransfer><feFuncA type="linear" slope=".075"/></feComponentTransfer><feBlend in="SourceGraphic" mode="soft-light"/></filter>
+    <clipPath id="frame"><rect width="600" height="360" rx="8"/></clipPath>
+    <path id="star" d="m0-10 3 7 8 1-6 5 2 8-7-4-7 4 2-8-6-5 8-1Z"/>
+  </defs>
+  <g clip-path="url(#frame)">
+    <rect width="600" height="360" fill="url(#bg)"/>
+    <path d="m0 233 58-56 52 19 58-83 56 64 54-42 64 63 61-58 40 23 44-55 113 94v158H0Z" fill="#233e3e" opacity=".6"/>
+    <path d="m0 277 61-33 67 9 72-48 46 37 58-17 46 18 72-37 68 38 48-8 62 47v77H0Z" fill="#122e34" opacity=".75"/>
+    <path d="m430 0-87 239 214-159L600 0Z" fill="#f2d092" opacity=".15"/>
+    <g fill="none" stroke="#a3ad80" opacity=".18"><path d="M18 117q63-44 118 5t58 11M0 129q84-48 138 9m-64-76 10 128m-72-59 139-21"/><circle cx="85" cy="121" r="41"/><circle cx="85" cy="121" r="27"/></g>
+    <!-- Far-away artillery silhouettes. -->
+    <g fill="#142c31" stroke="#142c31"><circle cx="507" cy="262" r="22"/><circle cx="507" cy="262" r="14" fill="#355349" stroke-width="5"/><path d="m480 245 71-62 8 10-71 63Z"/><path d="m495 241-22-9-14 7 31 21m26-9 49 35-4 6-54-32" stroke-width="5"/><path d="m68 276 60-23 3 8-64 23Z"/><circle cx="66" cy="286" r="15"/></g>
+    <rect width="600" height="360" fill="url(#halo)"/>
+    <!-- Broad shoulders and high uniform lapels. -->
+    <path d="M275 209h61l14 23 76 20q42 10 56 51l21 57H106l17-64q9-24 40-35l90-27Z" fill="url(#coat)" stroke="#183731" stroke-width="3"/>
+    <path d="m271 210 64-2 5 31-32 35-37-35Z" fill="#b58059"/>
+    <path d="m270 222 35 24 33-24 17 24-46 54-53-54Z" fill="#e8ddba"/>
+    <path d="m299 249 13-1 10 15-12 39-17-37Z" fill="#182e30"/>
+    <path d="m258 231-34 27 44 32-25 13 53 57 13-61Z" fill="#5c7254" stroke="#263f36" stroke-width="2"/>
+    <path d="m348 231 46 27-45 36 25 12-63 54-1-62Z" fill="#2b4940" stroke="#183b37" stroke-width="2"/>
+    <path d="m231 258 22-28 16 10-7 26Z" fill="#764c3d" stroke="#ceba75" stroke-width="2"/>
+    <path d="m349 235 20 11 12 22-22-4Z" fill="#764c3d" stroke="#ceba75" stroke-width="2"/>
+    <g fill="url(#gold)"><path d="m247 241-6 15 10-5 8 6 1-12-7-8Z"/><path d="m360 244-1 10 15 6-8-11Z"/></g>
+    <path d="m153 262 63-16 7 13-69 18Zm247-16 61 17-1 14-68-18Z" fill="url(#gold)" stroke="#3d513e" stroke-width="2"/>
+    <g fill="#354d3d"><use href="#star" transform="translate(174 261) scale(.6)"/><use href="#star" transform="translate(195 255) scale(.6)"/><use href="#star" transform="translate(419 256) scale(.6)"/><use href="#star" transform="translate(440 262) scale(.6)"/></g>
+    <path d="m130 295 41-14m238 0 44 15m-118 39-2 25m-158-74-14 55" fill="none" stroke="#a8b089" stroke-width="2" opacity=".45"/>
+    <!-- Face: full jaw, small eyes, flatter mouth, rounded ears. -->
+    <path d="M251 102q-20 5-16 28l9 20 10-3m104-45q20 0 16 26l-10 21-11-4" fill="#b77f59" stroke="#675844" stroke-width="2"/>
+    <path d="M254 86q47-26 94 2l12 51-8 55q-5 18-22 28-27 13-54-3-17-11-22-31l-10-40Z" fill="url(#skin)" stroke="#71523f" stroke-width="2.5"/>
+    <path d="m345 92 12 43-10 57-16 21-28 13 29-38 6-42-7-37Z" fill="#896147" opacity=".58"/>
+    <path d="m257 100 24-5 31 5 18-4 10 27-33-8-29 6-19-1Z" fill="#efc58b" opacity=".65"/>
+    <path d="m253 149 12-17 20 14-5 24-20 6Zm68-6 22-12 10 25-12 23-20-13Z" fill="#cb956c" opacity=".8"/>
+    <path d="M263 123q13-7 26-1m34-1q14-6 26 3" fill="none" stroke="#4b4134" stroke-width="4" stroke-linecap="round"/>
+    <path d="M261 136q13-5 26-1m37 0q12-5 22 0" fill="none" stroke="#584333" stroke-width="2.5" stroke-linecap="round"/>
+    <path d="m266 141 20-1m39 0 19 1" fill="none" stroke="#aa7652" stroke-width="1.5"/>
+    <ellipse cx="278" cy="134" rx="3.2" ry="2.7" fill="#282c27"/><ellipse cx="332" cy="134" rx="3.2" ry="2.7" fill="#282c27"/>
+    <path d="m302 132-5 27-9 7q12 7 25 0l-5-10" fill="#eabc82" stroke="#9e684a" stroke-width="2" stroke-linejoin="round"/>
+    <path d="m302 138-2 17 6 4" stroke="#ffe2a3" stroke-width="3" fill="none" stroke-linecap="round"/>
+    <path d="m289 168 8 1m9 0 6-2" stroke="#674c3b" stroke-width="2.3" stroke-linecap="round"/>
+    <path d="M288 182q11-7 18-3 8-3 18 2l-17 7Z" fill="#986247"/>
+    <path d="M285 183q19 2 40-1" fill="none" stroke="#573e32" stroke-width="2.3" stroke-linecap="round"/>
+    <path d="M290 190q16 4 29-2m-28 14q16 5 31-1" fill="none" stroke="#edc18a" stroke-width="2.5" stroke-linecap="round"/>
+    <path d="m281 167-6 13 3 15m46-31 9 17-4 16m-67-47 15 2m51-1 15-2" fill="none" stroke="#a47654" stroke-width="1.7"/>
+    <!-- Large peaked cap with a decorative crown insignia. -->
+    <path d="M235 102q-37-31-13-61 26-32 83-28 68-2 94 35 15 26-33 55Z" fill="url(#hat)" stroke="#173b34" stroke-width="3"/>
+    <path d="M222 49q23-31 77-31 58-2 88 30-36-12-77-10-47-1-88 11Z" fill="#a3a47b" opacity=".4"/>
+    <path d="M245 74q59-22 119 0l-1 30q-60-20-117 0Z" fill="#27493c" stroke="#829071" stroke-width="2"/>
+    <path d="M243 89q63-21 120 0" fill="none" stroke="url(#gold)" stroke-width="5"/>
+    <path d="M244 101q58-11 120 2l-16 16q-42-18-92-1Z" fill="#142a28" stroke="#172f2e" stroke-width="2"/>
+    <path d="M252 105q46-7 99 2" fill="none" stroke="#b4ad79" stroke-width="2" opacity=".75"/>
+    <circle cx="305" cy="68" r="15" fill="url(#gold)" stroke="#c4b580" stroke-width="2"/>
+    <circle cx="305" cy="68" r="11" fill="#737c51"/>
+    <use href="#star" transform="translate(305 68) scale(.85)" fill="#f4d790"/>
+    <path d="M234 45q25-19 51-20m61 1 24 10" fill="none" stroke="#d5cb8e" stroke-width="2" opacity=".6"/>
+    <!-- Medals and a folded map. -->
+    <g fill="url(#gold)" stroke="#4c6048" stroke-width="1.5">
+      <path d="m175 290 8-7 10 2 5 9-5 10-11 2-9-7Z"/><use href="#star" transform="translate(186 294) scale(.6)" fill="#e9dbad"/>
+      <path d="m194 320 8-7 10 2 5 9-5 10-11 2-9-7Z"/><use href="#star" transform="translate(205 324) scale(.6)" fill="#e9dbad"/>
+    </g>
+    <path d="m-15 332 92-45 85 43 66-26 65 56H0Z" fill="url(#map)" stroke="#a69964" stroke-width="2"/>
+    <path d="m16 334 60-29 61 29 28 5 50-17 29 35m-190-6 23-19 24 12 29-13m-19-15 5 38m58-15 29 12" fill="none" stroke="#67785b" stroke-width="2"/>
+    <path d="m85 329 50 22 37-9 39 9" fill="none" stroke="#a34e3d" stroke-width="2.5" stroke-dasharray="5 4"/>
+    <g fill="#f8d28c" opacity=".7"><circle cx="109" cy="181" r="2"/><circle cx="448" cy="99" r="2"/><circle cx="462" cy="191" r="1.5"/><circle cx="530" cy="161" r="2"/><circle cx="173" cy="55" r="1"/></g>
+    <rect width="600" height="360" fill="url(#vignette)"/>
+    <rect width="600" height="360" fill="transparent" filter="url(#grain)"/>
+  </g>
+</svg>

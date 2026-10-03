@@ -1,0 +1,30 @@
+node_modules/
+dist/
+*.tsbuildinfo
+.vite/
+
+# Local reference material; never part of the repository or website.
+*.epub
+*.pdf
+*.mobi
+*.azw
+*.azw3
+
+# Generated previews, historical checks and benchmark replays.
+/artifacts/
+/reports/*.json
+/coverage/
+*.log
+
+# Local credentials, environment overrides and editor state.
+.env
+.env.*
+!.env.example
+.agents/
+.codex/
+.aws/
+.vscode/
+.idea/
+*.local
+.DS_Store
+Thumbs.db
