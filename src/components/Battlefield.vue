@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import BoardCard from './BoardCard.vue'
 import { definitions } from '../data'
+import { ABILITIES } from '../data/abilities'
 import { BOARD_LIMIT } from '../game/rules'
 import { presentCharacter } from '../presentation/battle'
 import type { PresentedCharacter } from '../presentation/battle'
@@ -18,7 +19,7 @@ function disabled(card: PresentedCharacter): boolean {
 
 function details(character: CharacterInstance): string[] {
   const result: string[] = []
-  if (character.countdown !== undefined) result.push(`折戟沉沙 ${character.countdown}`)
+  if (character.countdown !== undefined) result.push(`${ABILITIES.LIN_COUNTDOWN.name} ${character.countdown}`)
   if (character.returnCount !== undefined) result.push(`复出 ${character.returnCount} / 3`)
   if (character.commandRoll !== undefined) result.push(`指令骰 ${character.commandRoll}${character.commandRoll >= 3 && character.commandRoll <= 5 ? '' : ' · 停攻'}`)
   return result

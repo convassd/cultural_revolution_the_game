@@ -10,6 +10,8 @@ The game engine is pure TypeScript and can run without Vue or a DOM. Vue display
 
 `PlayerState` holds HP, resources, deck, hand, battlefield, discard pile and pending returns. `GameState` holds both players, the current turn, winner, instance ID counter, revealed-hand snapshot, once-per-game group trigger, logs and any mandatory entry target awaiting selection. It contains no rollback history.
 
+The engine retains a revealed-hand snapshot until turn end. The UI shows it as names in the opponent's hand strip only for the caster, and dismisses that display on the next selection or game action.
+
 ## Engine entry points
 
 ```ts

@@ -29,13 +29,15 @@ const portrait = computed(() => `${import.meta.env.BASE_URL}${props.card.image.r
     :disabled="disabled" :aria-pressed="selected ?? false" :aria-label="`${card.name}，费用 ${card.cost}，攻击 ${attack ?? card.attack}，生命 ${health ?? card.health}`"
     @click="$emit('select')">
     <div class="card-heading"><span class="cost" title="费用">{{ card.cost }}</span><strong>{{ card.name }}</strong><span class="rarity">{{ card.rarity }}</span></div>
-    <div class="portrait"><img :src="portrait" :alt="`${card.name}的卡牌插画`" /><span class="faction">{{ currentFaction }}</span></div>
-    <div class="skill-text">
+    <div class="portrait">
+      <img :src="portrait" :alt="`${card.name}的卡牌插画`" /><span class="faction">{{ currentFaction }}</span>
+      <div v-if="details?.length" class="card-state-tags"><span v-for="detail in details" :key="detail">{{ detail }}</span></div>
+    </div>
+    <div class="skill-text" :title="[ability ? `${ability.name}：${ability.description}` : '无技能', card.relationGroup ? `关系组：${GROUP_NAMES[card.relationGroup]}` : null].filter(Boolean).join('\n')">
       <template v-if="ability"><strong>{{ ability.name }}</strong><span v-if="card.abilityId && !isAbilityImplemented(card.abilityId)" class="pending">暂未实现</span><p>{{ ability.description }}</p></template>
       <p v-else class="no-skill">无技能</p>
       <small v-if="card.relationGroup">{{ GROUP_NAMES[card.relationGroup] }}</small>
     </div>
-    <div v-if="details?.length" class="card-state-tags"><span v-for="detail in details" :key="detail">{{ detail }}</span></div>
     <div class="card-stats"><span class="attack" :class="{ buffed: (attack ?? card.attack) > card.attack, debuffed: (attack ?? card.attack) < card.attack }" title="当前攻击力">⚔ {{ attack ?? card.attack }}</span><small>{{ status || '人物' }}</small><span class="health" title="当前生命">♥ {{ health ?? card.health }}</span></div>
   </button>
 </template>

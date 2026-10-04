@@ -50,10 +50,10 @@ All eight are implemented. In-game names and descriptions come from [abilities.t
 | Ability ID | Chinese name / English rendering | Behavior |
 | --- | --- | --- |
 | `TOUGH` | 申辩 / Defense | Reduce the first positive damage received in each global turn by one. Reducing one damage to zero still consumes the use; an original zero-damage hit does not. Applies to retaliation. |
-| `BUFF_ONE` | 动员 / Mobilization | On entry, another friendly character gains +1 attack for this turn. Resting characters are eligible; the entering character cannot target itself. |
+| `BUFF_ONE` | 声援 / Support | On entry, another friendly character gains +1 attack for this turn. Resting characters are eligible; the entering character cannot target itself. |
 | `DRAW_ONE` | 串联 / Networking | On entry, draw one card. Skip if the deck is empty. |
-| `REVEAL_HAND` | 内部消息 / Inside Information | Reveal a snapshot of the enemy's current hand to the caster for the rest of this turn. Later changes do not update it. |
-| `GROUP_DRAW` | 碰头会 / Coordination Meeting | On entry, draw one card if another friendly member of the character's group was already in play. The entering character and enemy members do not count. |
+| `REVEAL_HAND` | 调查材料 / Investigation Materials | Replace the enemy hand backs in the middle row with names from a snapshot of their current hand. The caster's next selection or game action restores the backs. Scroll horizontally to read long hands. |
+| `GROUP_DRAW` | 动员 / Mobilization | On entry, draw one card if another friendly member of the character's group was already in play. The entering character and enemy members do not count. |
 | `CHARGE` | 冲击 / Assault | Can attack on the entry turn, still at most once per turn. |
 | `WEAKEN` | 大字报 / Big-Character Poster | On entry, an enemy character loses one attack for this turn, including retaliation. |
 | `GUARD` | 保卫 / Protection | While in play, enemy characters cannot directly attack its player. They can still attack any friendly character. |
@@ -76,7 +76,7 @@ The die does not directly restrict other friendly characters. There is no roll o
 
 ### Zhou Enlai — `ZHOU_MEDIATION`
 
-**斡旋 / Mediation.** During each owner's turn, the first other friendly character that would die from damage instead remains at one HP. Zhou takes two damage and can die from it. At most once per owner's turn; no trigger during the enemy turn, no self-rescue and no rescue from direct-death effects.
+**调解 / Mediation.** During each owner's turn, the first other friendly character that would die from damage instead remains at one HP. Zhou takes two damage and can die from it. At most once per owner's turn; no trigger during the enemy turn, no self-rescue and no rescue from direct-death effects.
 
 ### Deng Xiaoping — `DENG_RETURN`
 

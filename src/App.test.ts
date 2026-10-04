@@ -2,9 +2,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createRenderer, nextTick } from 'vue'
 import App from './App.vue'
 import { characters, definitions } from './data'
+import { ABILITIES } from './data/abilities'
 import * as engine from './game/engine'
 import * as ai from './game/ai'
 import { createCharacter } from './game/effects'
+import { GROUP_NAMES } from './game/rules'
 import { BATTLE_EFFECT_DURATION } from './presentation/battle'
 import * as resultAudio from './presentation/resultSound'
 
@@ -82,6 +84,97 @@ afterEach(() => {
 })
 
 describe('match mode UI and AI scheduling', () => {
+  it.each([['hotseat', 0], ['ai', 0], ['ai', 1]] as const)(
+    'reveals enemy names in the middle row until the next hand selection: %s seat=%s', async (mode, player) => {
+      const state = engine.createGame(characters, () => 0.5)
+      state.currentPlayer = player
+      state.players[player].mana = 4
+      state.players[player].hand = ['kang_sheng', 'wu_han']
+      state.players[player === 0 ? 1 : 0].hand = ['mao_zedong', 'lin_biao']
+      vi.spyOn(engine, 'createGame').mockReturnValueOnce(state)
+      const ui = mount()
+      vi.mocked(Math.random).mockReturnValueOnce(player === 0 ? 0.999999 : 0)
+      await ui.click(mode === 'ai' ? 'AI对战' : '双人对战')
+      await ui.click('4康生')
+      await ui.click('打出人物')
+      const names = () => descendants(ui.root).filter(item => item.props.class === 'revealed-card-name').map(text)
+      expect(names()).toEqual(['毛泽东', '林彪'])
+      const strip = descendants(ui.root).find(item => item.props.class === 'opponent-hand-cards')!
+      expect(strip.props.role).toBe('status')
+      expect(text(strip)).not.toContain('◆')
+      expect(descendants(ui.root).some(item => item.props.class === 'revealed-hand')).toBe(false)
+      await ui.click('2吴晗')
+      expect(names()).toEqual([])
+      expect(descendants(ui.root).filter(item => item.props.class === 'card-back')).toHaveLength(2)
+    })
+
+  it('reveals an empty enemy hand and resets the strip on ending the turn', async () => {
+    const state = engine.createGame(characters, () => 0.5)
+    state.players[0].mana = 4
+    state.players[0].hand = ['kang_sheng']
+    state.players[1].hand = []
+    vi.spyOn(engine, 'createGame').mockReturnValueOnce(state)
+    const ui = mount()
+    await ui.click('双人对战')
+    await ui.click('4康生')
+    await ui.click('打出人物')
+    expect(descendants(ui.root).filter(item => item.props.class === 'revealed-card-name').map(text)).toEqual(['无手牌'])
+    await ui.click('结束回合')
+    expect(descendants(ui.root).some(item => item.props.class === 'revealed-card-name')).toBe(false)
+    expect(text(ui.root)).toContain('请将操作交给玩家 2')
+  })
+
+  it('does not show an AI hand reveal to the human observer', async () => {
+    const state = engine.createGame(characters, () => 0.5)
+    state.currentPlayer = 1
+    state.players[1].mana = 4
+    state.players[1].hand = ['kang_sheng']
+    state.players[0].hand = ['mao_zedong', 'lin_biao']
+    vi.spyOn(engine, 'createGame').mockReturnValueOnce(state)
+    vi.mocked(ai.chooseGreedyAction).mockReturnValueOnce({ type: 'PLAY_CARD', player: 1, cardId: 'kang_sheng' })
+    const ui = mount()
+    await ui.click('AI对战')
+    await vi.advanceTimersByTimeAsync(450)
+    expect(descendants(ui.root).some(item => item.props.class === 'revealed-card-name')).toBe(false)
+    expect(text(ui.root)).toContain('康生')
+  })
+
+  it('opens rules beside the gallery and references current ability and relationship names', async () => {
+    const originals = Object.values(ABILITIES).map(ability => ({ ability, name: ability.name, description: ability.description }))
+    const originalGroups = { ...GROUP_NAMES }
+    try {
+      for (const id of Object.keys(GROUP_NAMES) as Array<keyof typeof GROUP_NAMES>) GROUP_NAMES[id] = `测试关系${id}`
+      for (const [id, ability] of Object.entries(ABILITIES)) {
+        ability.name = `测试名称${id}`
+        ability.description = `测试描述${id}`
+      }
+      const ui = mount()
+      expect(text(ui.root)).toContain('横扫一切牛鬼蛇神')
+      const menu = descendants(ui.root).find(item => item.props.class === 'welcome-actions')!
+      expect(menu.children.filter(item => item.tag === 'button').map(text)).toEqual(['游戏规则', '了解卡牌'])
+      await ui.click('游戏规则')
+      const names = descendants(ui.root).filter(item => item.props.class === 'ability-name').map(text)
+      for (const ability of Object.values(ABILITIES)) {
+        expect(names).toContain(`「${ability.name}」`)
+        expect(text(ui.root)).toContain(ability.description)
+      }
+      const groupNames = descendants(ui.root).filter(item => item.props.class === 'relation-name').map(text)
+      expect(groupNames).toEqual(Object.values(GROUP_NAMES).map(name => `「${name}」`))
+      expect(text(ui.root)).toContain('开局与回合')
+      expect(vi.getTimerCount()).toBe(0)
+      await ui.click('返回')
+      await ui.click('双人对战')
+      expect(text(ui.root)).not.toContain('桌面规则')
+      expect(descendants(ui.root).some(item => item.props['aria-label'] === '游戏规则')).toBe(false)
+      expect(text(ui.root)).toContain('对局记录')
+      await ui.click('返回')
+      expect(text(ui.root)).toContain('横扫一切牛鬼蛇神')
+    } finally {
+      Object.assign(GROUP_NAMES, originalGroups)
+      for (const { ability, name, description } of originals) Object.assign(ability, { name, description })
+    }
+  })
+
   it.each([
     ['hotseat', 0, 0, '玩家1胜利'], ['hotseat', 0, 1, '玩家2胜利'],
     ['ai', 0, 0, '全面胜利'], ['ai', 0, 1, '退出舞台'],
@@ -120,7 +213,7 @@ describe('match mode UI and AI scheduling', () => {
     await ui.click('重新开始')
     expect(descendants(ui.root).some(item => String(item.props.class).includes('match-result'))).toBe(false)
     expect(resultAudio.stopResultAudio).toHaveBeenCalledTimes(2)
-    await ui.click('退出')
+    await ui.click('返回')
     expect(resultAudio.stopResultAudio).toHaveBeenCalledTimes(3)
   })
 
@@ -256,7 +349,7 @@ describe('match mode UI and AI scheduling', () => {
     await ui.click('重新开始')
     expect(text(ui.root)).toContain('本局 AI 先手')
     expect(vi.getTimerCount()).toBe(1)
-    await ui.click('退出')
+    await ui.click('返回')
     expect(vi.getTimerCount()).toBe(0)
     await vi.advanceTimersByTimeAsync(5000)
     expect(text(ui.root)).toContain('一张桌面，两种对战。')
@@ -286,7 +379,7 @@ describe('match mode UI and AI scheduling', () => {
     const ui = mount()
     await ui.click('AI对战')
     await ui.click('结束回合')
-    await ui.click('退出')
+    await ui.click('返回')
     expect(vi.getTimerCount()).toBe(0)
     await ui.click('双人对战')
     await vi.advanceTimersByTimeAsync(5000)

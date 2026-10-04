@@ -1,10 +1,10 @@
-# Wen Ge Sha · v0.0
+# Wen Ge Sha · v0.1
 
 A small browser card game set around characters from China's Cultural Revolution. Built with Vue 3, Vite and TypeScript as a personal learning and entertainment project.
 
 **[Click to play it now](https://convassd.github.io/cultural_revolution_the_game/)**
 
-The link becomes available after the first successful GitHub Pages deployment. The game interface is in Simplified Chinese; repository documentation is in English.
+The game interface is in Simplified Chinese; repository documentation is in English. See the [v0.1 release notes](docs/RELEASE-v0.1.md) for the latest interface improvements.
 
 ## What is included
 
@@ -19,14 +19,16 @@ The game runs entirely in the browser. It has no backend, accounts, database, an
 
 ## How to play
 
-1. Choose **AI battle** or **two-player battle** on the home screen. **Browse cards** opens the complete gallery.
+1. Choose **AI battle** or **two-player battle** on the home screen. **Game rules** opens the Chinese rules guide; **Browse cards** opens the complete gallery. Skill names, descriptions and relationship names in the guide are read from the same data as the cards.
 2. Each player receives a shuffled 24-card deck and starts with 20 HP. In AI games, your seat is randomly assigned, with equal chances of going first or second.
 3. Select a hand card, then click **Play character**. Playing immediately spends its cost and puts it on the battlefield. For an entry ability requiring a target, click a highlighted character to finish the effect. Plays cannot be undone; mandatory target selection cannot be canceled. If there is no eligible target, the ability is skipped.
 4. New characters rest until your next turn unless they have the charge ability. Select a ready character, then an enemy character or the opponent's attack button. Each character attacks at most once per turn.
 5. End your turn to refill resources and draw on the next player's turn. Hot-seat games hide the incoming player's hand until they confirm they are ready; AI games advance automatically.
-6. Reduce the opponent to 0 HP to win. Restart begins a fresh game in the same mode; Exit returns to the home screen. There is no save system.
+6. Reduce the opponent to 0 HP to win. Restart begins a fresh game in the same mode; Back returns to the home screen and ends the current match. There is no save system.
 
 See [Rules and abilities](docs/RULES.md) for complete mechanics and English descriptions of the Chinese card abilities.
+
+On desktop, player information sits beside each battlefield row, with turn information on the left. Battlefield cards and hand cards share a fixed 3:4 shape and scale to the available viewport height. The compact battlefield stays centered, while a separate hand area spans the browser's available width and fits its contents with minimal padding. A narrow control column aligns its top and bottom with the hand cards, placing the selected card's cost and current resources above Play character, with End Turn at the bottom. Both battlefield rows and your hand fit typical landscape browser viewports. Long hands scroll horizontally; hover over skill text for the complete description and relationship name. The log sits on the right when there is room beside the battlefield and moves below the hand otherwise. Narrow screens retain a vertical layout with swipeable card rows and a non-blocking portrait orientation hint.
 
 ## Run locally
 
@@ -79,6 +81,6 @@ Factions, relationship groups and rarities are abstractions for game mechanics, 
 
 The illustrations are locally authored SVG artwork. Reference photographs and paintings are linked in the portrait documentation; they are not included as downloaded image assets. No Blizzard artwork, card frames or fonts are bundled. Result sounds are synthesized with the browser's Web Audio API.
 
-This is a playable prototype, with limited balance testing and a desktop-oriented layout. It does not include online multiplayer, deep AI search, deck building, collections, saves, equipment or event cards. Larger balance and feature changes are outside the frozen `v0.0` game.
+This is a playable prototype, with limited balance testing and a desktop-oriented layout. It does not include online multiplayer, deep AI search, deck building, collections, saves, equipment or event cards. The `v0.1` update improves the interface while retaining the `v0.0` combat and balance rules.
 
 Local reference books, generated artwork previews, benchmark replay JSON, installed dependencies and build outputs are excluded by `.gitignore`. Keep `package-lock.json` in the repository so installs and CI builds use the same dependency versions.
