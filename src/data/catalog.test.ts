@@ -29,7 +29,7 @@ describe('card catalog', () => {
   it('combines faction filtering with every sort key and preserves ties', () => {
     for (const key of ['rarity', 'cost', 'attack', 'health'] as CardSortKey[]) {
       const cards = queryCards(characters, '无派别', key, 'desc')
-      expect(cards).toHaveLength(3)
+      expect(cards).toHaveLength(4)
       expect(cards.every(c => c.faction === '无派别')).toBe(true)
     }
     const sameCost = [definitions.zhang_yufeng!, definitions.wu_han!, definitions.yao_dengshan!]

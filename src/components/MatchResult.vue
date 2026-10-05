@@ -3,11 +3,9 @@ import { computed, onMounted } from 'vue'
 import type { PlayerId } from '../game/types'
 import { playResultSound } from '../presentation/resultSound'
 
-const props = defineProps<{ winner: PlayerId; mode: 'hotseat' | 'ai'; humanPlayer: PlayerId }>()
-const victory = computed(() => props.mode === 'hotseat' || props.winner === props.humanPlayer)
-const title = computed(() => props.mode === 'ai'
-  ? victory.value ? '全面胜利' : '退出舞台'
-  : `玩家${props.winner + 1}胜利`)
+const props = defineProps<{ winner: PlayerId; humanPlayer: PlayerId }>()
+const victory = computed(() => props.winner === props.humanPlayer)
+const title = computed(() => victory.value ? '全面胜利' : '退出舞台')
 
 onMounted(() => playResultSound(victory.value))
 </script>

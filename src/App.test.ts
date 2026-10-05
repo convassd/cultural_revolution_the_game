@@ -9,6 +9,22 @@ import { createCharacter } from './game/effects'
 import { GROUP_NAMES } from './game/rules'
 import { BATTLE_EFFECT_DURATION } from './presentation/battle'
 import * as resultAudio from './presentation/resultSound'
+import type { SessionCallbacks } from './online/session'
+import { projectState } from './online/protocol'
+import type { GameState, PlayerId, GameEvent } from './game/types'
+const onlineMocks = vi.hoisted(() => ({ sessions: [] as Array<{ callbacks: SessionCallbacks; submit: ReturnType<typeof vi.fn>; ready: ReturnType<typeof vi.fn>; destroy: ReturnType<typeof vi.fn>; rematch: ReturnType<typeof vi.fn> }> }))
+vi.mock('./online/session', async importOriginal => {
+  const original = await importOriginal<typeof import('./online/session')>()
+  return { ...original, OnlineSession: class {
+    submit = vi.fn()
+    ready = vi.fn()
+    destroy = vi.fn()
+    rematch = vi.fn()
+    constructor(public callbacks: SessionCallbacks) { onlineMocks.sessions.push(this) }
+    host() { this.callbacks.onStatus({ ...original.idleStatus(), phase: 'waiting', id: 'test-room', isHost: true, message: '等待朋友加入' }) }
+    join() { this.callbacks.onStatus({ ...original.idleStatus(), phase: 'connecting', message: '正在与房主建立直连' }) }
+  } }
+})
 
 // Vue's actual render/update/events run against a small in-memory host, without DOM dependencies.
 interface Node {
@@ -67,6 +83,7 @@ function mount() {
   return { root, app, button, click }
 }
 beforeEach(() => {
+  onlineMocks.sessions.length = 0
   vi.useFakeTimers()
   vi.spyOn(resultAudio, 'prepareResultAudio').mockImplementation(() => {})
   vi.spyOn(resultAudio, 'playResultSound').mockImplementation(() => {})
@@ -84,7 +101,7 @@ afterEach(() => {
 })
 
 describe('match mode UI and AI scheduling', () => {
-  it.each([['hotseat', 0], ['ai', 0], ['ai', 1]] as const)(
+  it.each([['ai', 0], ['ai', 1]] as const)(
     'reveals enemy names in the middle row until the next hand selection: %s seat=%s', async (mode, player) => {
       const state = engine.createGame(characters, () => 0.5)
       state.currentPlayer = player
@@ -94,7 +111,7 @@ describe('match mode UI and AI scheduling', () => {
       vi.spyOn(engine, 'createGame').mockReturnValueOnce(state)
       const ui = mount()
       vi.mocked(Math.random).mockReturnValueOnce(player === 0 ? 0.999999 : 0)
-      await ui.click(mode === 'ai' ? 'AI对战' : '双人对战')
+      await ui.click('AI对战')
       await ui.click('4康生')
       await ui.click('打出人物')
       const names = () => descendants(ui.root).filter(item => item.props.class === 'revealed-card-name').map(text)
@@ -115,13 +132,13 @@ describe('match mode UI and AI scheduling', () => {
     state.players[1].hand = []
     vi.spyOn(engine, 'createGame').mockReturnValueOnce(state)
     const ui = mount()
-    await ui.click('双人对战')
+    await ui.click('AI对战')
     await ui.click('4康生')
     await ui.click('打出人物')
     expect(descendants(ui.root).filter(item => item.props.class === 'revealed-card-name').map(text)).toEqual(['无手牌'])
     await ui.click('结束回合')
     expect(descendants(ui.root).some(item => item.props.class === 'revealed-card-name')).toBe(false)
-    expect(text(ui.root)).toContain('请将操作交给玩家 2')
+    expect(text(ui.root)).toContain('贪心 AI 正在行动')
   })
 
   it('does not show an AI hand reveal to the human observer', async () => {
@@ -163,7 +180,7 @@ describe('match mode UI and AI scheduling', () => {
       expect(text(ui.root)).toContain('开局与回合')
       expect(vi.getTimerCount()).toBe(0)
       await ui.click('返回')
-      await ui.click('双人对战')
+      await ui.click('AI对战')
       expect(text(ui.root)).not.toContain('桌面规则')
       expect(descendants(ui.root).some(item => item.props['aria-label'] === '游戏规则')).toBe(false)
       expect(text(ui.root)).toContain('对局记录')
@@ -176,7 +193,6 @@ describe('match mode UI and AI scheduling', () => {
   })
 
   it.each([
-    ['hotseat', 0, 0, '玩家1胜利'], ['hotseat', 0, 1, '玩家2胜利'],
     ['ai', 0, 0, '全面胜利'], ['ai', 0, 1, '退出舞台'],
     ['ai', 1, 0, '退出舞台'], ['ai', 1, 1, '全面胜利'],
   ] as const)('shows the result once after damage: %s human=%s winner=%s', async (mode, human, winner, label) => {
@@ -191,7 +207,7 @@ describe('match mode UI and AI scheduling', () => {
     vi.mocked(Math.random).mockReturnValueOnce(human === 0 ? 0.999999 : 0)
     vi.mocked(ai.chooseGreedyAction).mockReturnValueOnce({ type: 'ATTACK', player: winner,
       attackerId: 'finisher', target: { type: 'player' } })
-    await ui.click(mode === 'ai' ? 'AI对战' : '双人对战')
+    await ui.click('AI对战')
     expect(resultAudio.prepareResultAudio).toHaveBeenCalledOnce()
     if (mode === 'ai' && winner !== human) await vi.advanceTimersByTimeAsync(450)
     else {
@@ -199,14 +215,14 @@ describe('match mode UI and AI scheduling', () => {
         String(item.props['aria-label']).startsWith('聂元梓，'))!
       ;(card.props.onClick as () => void)()
       await nextTick()
-      await ui.click(mode === 'ai' ? '攻击贪心 AI' : '攻击玩家')
+      await ui.click('攻击贪心 AI')
     }
     expect(descendants(ui.root).some(item => String(item.props.class).includes('match-result'))).toBe(false)
     expect(resultAudio.playResultSound).not.toHaveBeenCalled()
     await vi.advanceTimersByTimeAsync(BATTLE_EFFECT_DURATION)
     const overlay = descendants(ui.root).find(item => String(item.props.class).includes('match-result'))!
     expect(text(overlay)).toContain(label)
-    expect(resultAudio.playResultSound).toHaveBeenCalledExactlyOnceWith(mode === 'hotseat' || winner === human)
+    expect(resultAudio.playResultSound).toHaveBeenCalledExactlyOnceWith(winner === human)
     await vi.advanceTimersByTimeAsync(5000)
     expect(resultAudio.playResultSound).toHaveBeenCalledOnce()
     expect(vi.getTimerCount()).toBe(0)
@@ -217,15 +233,16 @@ describe('match mode UI and AI scheduling', () => {
     expect(resultAudio.stopResultAudio).toHaveBeenCalledTimes(3)
   })
 
-  it('shows a full-group skill victory after its damage effect', async () => {
+  it('shows Jiang drawing a rebel and stacking Mao and group auras without the removed full-group victory', async () => {
     const state = engine.createGame(characters, () => 0.5)
     state.players[0].mana = 4
     state.players[0].hand = ['jiang_qing']
-    state.players[0].board = ['zhang_chunqiao', 'yao_wenyuan', 'wang_hongwen'].map(id => createCharacter(definitions[id]!, id))
+    state.players[0].board = ['zhang_chunqiao', 'yao_wenyuan', 'wang_hongwen', 'mao_zedong'].map(id => createCharacter(definitions[id]!, id))
+    state.players[0].deck = ['wu_han', 'nie_yuanzi']
     state.players[1].hp = 6
     vi.spyOn(engine, 'createGame').mockReturnValueOnce(state)
     const ui = mount()
-    await ui.click('双人对战')
+    await ui.click('AI对战')
     const card = descendants(ui.root).find(item => item.tag === 'button' &&
       String(item.props['aria-label']).startsWith('江青，'))!
     ;(card.props.onClick as () => void)()
@@ -233,9 +250,12 @@ describe('match mode UI and AI scheduling', () => {
     await ui.click('打出人物')
     expect(resultAudio.playResultSound).not.toHaveBeenCalled()
     await vi.advanceTimersByTimeAsync(BATTLE_EFFECT_DURATION)
-    expect(text(ui.root)).toContain('玩家1胜利')
+    expect(descendants(ui.root).find(item => item.props['aria-label'] === '江青，费用 4，攻击 7，生命 5')).toBeDefined()
+    expect(text(ui.root)).toContain('借势')
+    expect(text(ui.root)).toContain('聂元梓')
+    expect(text(ui.root)).not.toContain('全面胜利')
     expect(text(ui.root)).not.toContain('请将操作交给')
-    expect(resultAudio.playResultSound).toHaveBeenCalledOnce()
+    expect(resultAudio.playResultSound).not.toHaveBeenCalled()
   })
 
   it.each([
@@ -257,7 +277,7 @@ describe('match mode UI and AI scheduling', () => {
       ;(card.props.onClick as () => void)()
       await nextTick()
     }
-    await ui.click('双人对战')
+    await ui.click('AI对战')
     await clickCard(name!)
     await ui.click('打出人物')
     const committed = actions.mock.results.at(-1)!.value.state
@@ -280,22 +300,115 @@ describe('match mode UI and AI scheduling', () => {
 
   it('offers equal mode buttons with their own descriptions and a separate gallery button', () => {
     const ui = mount()
-    expect(ui.button('双人对战').props.class).toBe('mode-button')
+    expect(ui.button('双人联机').props.class).toBe('mode-button')
     expect(ui.button('AI对战').props.class).toBe('mode-button')
-    expect(text(ui.button('双人对战'))).toContain('同一浏览器')
+    expect(text(ui.button('双人联机'))).toContain('分享 ID')
     expect(text(ui.button('AI对战'))).toContain('单步评估')
     expect(ui.button('了解卡牌').props.class).not.toBe('mode-button')
   })
 
-  it('keeps hot-seat handoff and does not start an AI timer', async () => {
+  it('opens the online lobby, creates a room and disposes the connection on return', async () => {
     const ui = mount()
-    await ui.click('双人对战')
-    await ui.click('结束回合')
-    expect(text(ui.root)).toContain('请将操作交给玩家 2')
+    expect(text(ui.root)).not.toContain('双人对战')
+    await ui.click('双人联机')
+    expect(text(ui.root)).toContain('加入朋友')
+    expect(onlineMocks.sessions).toHaveLength(0)
+    await ui.click('创建房间')
+    expect(text(ui.root)).toContain('等待朋友加入')
+    const session = onlineMocks.sessions[0]!
+    expect(descendants(ui.root).find(item => item.props.id === 'share-room-id')?.props.value).toBe('test-room')
+    await ui.click('返回')
+    expect(session.destroy).toHaveBeenCalledOnce()
+    session.callbacks.onStatus({ phase: 'closed', id: '', isHost: true, seat: 0, ready: false, message: 'late failure' })
+    await nextTick()
+    expect(text(ui.root)).not.toContain('late failure')
     expect(vi.getTimerCount()).toBe(0)
-    await ui.click('我是玩家 2')
-    expect(ui.button('结束回合').props.disabled).toBe(false)
-    expect(text(ui.root)).toContain('玩家 2 的手牌')
+  })
+
+  it('joins using an ID, sends only actions, and displays a private reveal snapshot until the next selection', async () => {
+    const ui = mount()
+    await ui.click('双人联机')
+    const input = descendants(ui.root).find(item => item.props.id === 'room-id')!
+    ;(input.props.onInput as Function)({ target: { value: 'test-room' } })
+    await nextTick()
+    expect(ui.button('加入房间').props.disabled).toBe(false)
+    const form = descendants(ui.root).find(item => item.tag === 'form')!
+    ;(form.props.onSubmit as Function)({ preventDefault() {} })
+    await nextTick()
+    const session = onlineMocks.sessions[0]!
+    const state = engine.createGame(characters, () => 0.5)
+    state.currentPlayer = 1
+    state.players[1].mana = 10
+    state.players[1].hand = ['kang_sheng', 'wu_han']
+    state.players[0].hand = ['mao_zedong', 'lin_biao']
+    const frame = (state: GameState, revision: number, reveal = false) => ({ matchId: 'room-match', revision, seat: 1 as PlayerId, state: projectState(state, 1), events: [], reveal })
+    const status = { phase: 'playing' as const, id: 'guest-id', isHost: false, seat: 1 as PlayerId, ready: true, message: '已连接' }
+    session.callbacks.onStatus(status)
+    session.callbacks.onFrame(frame(state, 0))
+    await nextTick()
+    expect(text(ui.root)).toContain('你（玩家 2） 的手牌')
+    expect(text(ui.root)).not.toContain('毛泽东')
+    expect(text(ui.root)).not.toContain('请将操作交给')
+    const apply = vi.spyOn(engine, 'applyAction')
+    await ui.click('4康生')
+    await ui.click('打出人物')
+    expect(session.submit).toHaveBeenCalledWith({ type: 'PLAY_CARD', player: 1, cardId: 'kang_sheng' })
+    expect(apply).not.toHaveBeenCalled()
+    session.callbacks.onStatus({ ...status, ready: false })
+    await nextTick()
+    expect(ui.button('结束回合').props.disabled).toBe(true)
+    const after = structuredClone(state)
+    after.players[1].hand = ['wu_han']
+    after.players[1].board = [createCharacter(definitions.kang_sheng!, 'kang')]
+    after.players[1].mana = 6
+    after.revealedHand = { viewer: 1, owner: 0, cards: ['mao_zedong', 'lin_biao'] }
+    session.callbacks.onFrame(frame(after, 1, true))
+    session.callbacks.onStatus(status)
+    await nextTick()
+    expect(descendants(ui.root).filter(item => item.props.class === 'revealed-card-name').map(text)).toEqual(['毛泽东', '林彪'])
+    expect(session.ready).toHaveBeenCalledTimes(2)
+    await ui.click('2吴晗')
+    expect(descendants(ui.root).filter(item => item.props.class === 'card-back')).toHaveLength(2)
+    expect(text(ui.root)).not.toContain('毛泽东')
+    ui.app.unmount()
+    apps.splice(apps.indexOf(ui.app), 1)
+    expect(session.destroy).toHaveBeenCalledOnce()
+  })
+
+  it('keeps the online perspective through remote damage, acknowledges after animation, and freezes on disconnect', async () => {
+    const ui = mount()
+    await ui.click('双人联机')
+    await ui.click('创建房间')
+    const session = onlineMocks.sessions[0]!
+    const state = engine.createGame(characters, () => 0.5)
+    state.players[1].hp = 1
+    state.players[0].board = [createCharacter(definitions.nie_yuanzi!, 'remote-attacker')]
+    const status = { phase: 'playing' as const, id: 'host-id', isHost: true, seat: 1 as PlayerId, ready: true, message: '已连接' }
+    const frame = (state: GameState, revision: number, events: GameEvent[] = []) => ({ matchId: 'online-match', revision, seat: 1 as PlayerId, state: projectState(state, 1), events, reveal: false })
+    session.callbacks.onStatus(status)
+    session.callbacks.onFrame(frame(state, 0))
+    await nextTick()
+    expect(ui.button('结束回合').props.disabled).toBe(true)
+    expect(text(ui.root)).toContain('等待对方行动')
+    const result = engine.applyAction(state, { type: 'ATTACK', player: 0, attackerId: 'remote-attacker', target: { type: 'player' } }, definitions)
+    session.callbacks.onStatus({ ...status, ready: false })
+    session.callbacks.onFrame(frame(result.state, 1, result.events))
+    await nextTick()
+    expect(text(ui.root)).toContain('正在显示伤害与离场效果')
+    expect(session.ready).toHaveBeenCalledOnce()
+    expect(resultAudio.playResultSound).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(BATTLE_EFFECT_DURATION)
+    expect(session.ready).toHaveBeenCalledTimes(2)
+    expect(text(ui.root)).toContain('退出舞台')
+    expect(resultAudio.playResultSound).toHaveBeenCalledExactlyOnceWith(false)
+    session.callbacks.onStatus({ ...status, phase: 'closed', ready: false, message: '对方已离开' })
+    await nextTick()
+    expect(text(ui.root)).toContain('对方已离开')
+    expect(ui.button('结束回合').props.disabled).toBe(true)
+    expect(ui.button('再来一局').props.disabled).toBe(true)
+    await ui.click('返回')
+    expect(session.destroy).toHaveBeenCalledOnce()
+    expect(vi.getTimerCount()).toBe(0)
   })
 
   it('locks human actions during AI turn, keeps the human perspective, then returns automatically', async () => {
@@ -375,15 +488,15 @@ describe('match mode UI and AI scheduling', () => {
     expect(vi.getTimerCount()).toBe(0)
   })
 
-  it('cancels pending AI on exit and cannot affect a subsequently started hot-seat match', async () => {
+  it('cancels pending AI on exit and cannot affect a subsequently opened online lobby', async () => {
     const ui = mount()
     await ui.click('AI对战')
     await ui.click('结束回合')
     await ui.click('返回')
     expect(vi.getTimerCount()).toBe(0)
-    await ui.click('双人对战')
+    await ui.click('双人联机')
     await vi.advanceTimersByTimeAsync(5000)
-    expect(text(ui.root)).toContain('第 1 回合')
+    expect(text(ui.root)).toContain('加入朋友')
     expect(text(ui.root)).not.toContain('贪心 AI（玩家 2）')
   })
 

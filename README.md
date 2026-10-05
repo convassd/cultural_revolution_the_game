@@ -1,32 +1,34 @@
-# Wen Ge Sha · v0.1
+# Wen Ge Sha · v0.2
 
 A small browser card game set around characters from China's Cultural Revolution. Built with Vue 3, Vite and TypeScript as a personal learning and entertainment project.
 
 **[Click to play it now](https://convassd.github.io/cultural_revolution_the_game/)**
 
-The game interface is in Simplified Chinese; repository documentation is in English. See the [v0.1 release notes](docs/RELEASE-v0.1.md) for the latest interface improvements.
+The game interface is in Simplified Chinese; repository documentation is in English. See the [v0.2 release notes](docs/RELEASE-v0.2.md) for online multiplayer and the revised SSR abilities.
 
 ## What is included
 
 - 48 unique character cards with individual SVG illustrations.
-- Two-player hot-seat play in one browser, or a local, one-step greedy AI opponent.
+- Two-player PeerJS/WebRTC multiplayer by sharing a room ID, or a local, one-step greedy AI opponent.
 - Turn-based resource spending, simultaneous character combat, faction advantages and dynamic relationship bonuses.
 - All eight reusable abilities and all five unique character abilities.
 - A card gallery with faction filters and rarity, cost, attack and health sorting.
 - Floating damage numbers, shattering death effects, and a central victory/defeat announcement with locally synthesized sound.
 
-The game runs entirely in the browser. It has no backend, accounts, database, analytics or runtime calls to an AI service. Players visiting the hosted version do not need to clone the repository or install anything. Loading the hosted files initially requires an internet connection; this version does not include a PWA or guaranteed offline cache.
+The game runs entirely in the browser. There is no self-hosted game server, account system, database, analytics or AI service. AI matches run locally; multiplayer needs internet access to the public PeerJS signaling service and STUN servers, then sends game messages over a direct WebRTC data channel. No TURN relay is configured, so some NAT/firewall combinations cannot connect. Players visiting the hosted version do not need to clone the repository or install anything. This version does not include a PWA or guaranteed offline cache.
 
 ## How to play
 
-1. Choose **AI battle** or **two-player battle** on the home screen. **Game rules** opens the Chinese rules guide; **Browse cards** opens the complete gallery. Skill names, descriptions and relationship names in the guide are read from the same data as the cards.
-2. Each player receives a shuffled 24-card deck and starts with 20 HP. In AI games, your seat is randomly assigned, with equal chances of going first or second.
+1. Choose **AI battle** or **online multiplayer** on the home screen. For multiplayer, one player creates a room and shares its ID; the other pastes that ID and joins. Connection starts the match automatically. **Game rules** opens the Chinese rules guide; **Browse cards** opens the complete gallery. Skill names, descriptions and relationship names in the guide are read from the same data as the cards.
+2. Each player receives a shuffled 24-card deck and starts with 20 HP. Both modes randomly assign seats, with equal chances of going first or second. Your own cards always appear at the bottom.
 3. Select a hand card, then click **Play character**. Playing immediately spends its cost and puts it on the battlefield. For an entry ability requiring a target, click a highlighted character to finish the effect. Plays cannot be undone; mandatory target selection cannot be canceled. If there is no eligible target, the ability is skipped.
 4. New characters rest until your next turn unless they have the charge ability. Select a ready character, then an enemy character or the opponent's attack button. Each character attacks at most once per turn.
-5. End your turn to refill resources and draw on the next player's turn. Hot-seat games hide the incoming player's hand until they confirm they are ready; AI games advance automatically.
-6. Reduce the opponent to 0 HP to win. Restart begins a fresh game in the same mode; Back returns to the home screen and ends the current match. There is no save system.
+5. End your turn to refill resources and draw on the next player's turn. In multiplayer, each browser keeps its own hand visible and waits for the opponent. AI games advance automatically.
+6. Reduce the opponent to 0 HP to win. AI matches can restart at any time. After an online match ends, the host can start a rematch with newly randomized seats. Back returns to the home screen and closes the connection; the other player sees a disconnect notice. There is no save or reconnect system.
 
 See [Rules and abilities](docs/RULES.md) for complete mechanics and English descriptions of the Chinese card abilities.
+
+See [Multiplayer setup, testing and troubleshooting](docs/MULTIPLAYER.md) for two-window and two-device tests, connection limits and the host-authoritative design.
 
 On desktop, player information sits beside each battlefield row, with turn information on the left. Battlefield cards and hand cards share a fixed 3:4 shape and scale to the available viewport height. The compact battlefield stays centered, while a separate hand area spans the browser's available width and fits its contents with minimal padding. A narrow control column aligns its top and bottom with the hand cards, placing the selected card's cost and current resources above Play character, with End Turn at the bottom. Both battlefield rows and your hand fit typical landscape browser viewports. Long hands scroll horizontally; hover over skill text for the complete description and relationship name. The log sits on the right when there is room beside the battlefield and moves below the hand otherwise. Narrow screens retain a vertical layout with swipeable card rows and a non-blocking portrait orientation hint.
 
@@ -65,6 +67,7 @@ public/portraits/            48 independent character SVGs and a fallback
 src/
   data/                     Card definitions, Chinese ability text, gallery queries
   game/                     Pure TypeScript types, rules, engine, effects and AI
+  online/                   Host authority, private views, protocol and PeerJS lifecycle
   components/               Cards, battlefield, hand, gallery and result banner
   presentation/             Battle snapshots and browser-generated result sounds
   App.vue                   UI selection, action dispatch and turn scheduling
@@ -81,6 +84,6 @@ Factions, relationship groups and rarities are abstractions for game mechanics, 
 
 The illustrations are locally authored SVG artwork. Reference photographs and paintings are linked in the portrait documentation; they are not included as downloaded image assets. No Blizzard artwork, card frames or fonts are bundled. Result sounds are synthesized with the browser's Web Audio API.
 
-This is a playable prototype, with limited balance testing and a desktop-oriented layout. It does not include online multiplayer, deep AI search, deck building, collections, saves, equipment or event cards. The `v0.1` update improves the interface while retaining the `v0.0` combat and balance rules.
+This is a playable prototype, with limited balance testing and a desktop-oriented layout. It does not include matchmaking, spectators, reconnects, deep AI search, deck building, collections, saves, equipment or event cards. AI and multiplayer use the same rules, including the revised five SSR abilities described in the rules guide.
 
 Local reference books, generated artwork previews, benchmark replay JSON, installed dependencies and build outputs are excluded by `.gitignore`. Keep `package-lock.json` in the repository so installs and CI builds use the same dependency versions.

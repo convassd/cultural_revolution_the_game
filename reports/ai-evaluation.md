@@ -1,5 +1,7 @@
 # One-step greedy AI versus face-attack strategies
 
+This is a historical benchmark from before the five SSR ability revisions. Its win rates describe the earlier ruleset, not the current balance. The benchmark script can be rerun to evaluate the updated mechanics.
+
 The in-game random AI was replaced with a greedy heuristic. Evaluation used 20 HP, initially with the human always opening and the AI second. The UI now assigns first/second seats randomly; combat rules and scoring were not changed.
 
 Unconditional face attacks have clear counterexamples, but racing and first-seat advantage remain strong. These results do not establish that a second-seat AI usually beats a face-attack strategy.

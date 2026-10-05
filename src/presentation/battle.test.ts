@@ -80,8 +80,8 @@ describe('battle feedback without delayed game rules', () => {
     before.players[0].board = [unit('mao_zedong', 'mao'), unit('zhou_enlai', 'zhou'), unit('wu_han', 'a')]
     before.players[0].board[2]!.health = 1
     const result = run(before, { type: 'END_TURN', player: 1 }, 6)
-    expect(result.presentation!.boards[0][1]).toMatchObject({ damage: 4, dying: false, character: { health: 5 } })
-    expect(result.presentation!.boards[0][2]).toMatchObject({ damage: 2, dying: false, character: { health: 1 } })
+    expect(result.presentation!.boards[0][1]).toMatchObject({ damage: 8, dying: false, character: { health: 1 } })
+    expect(result.presentation!.boards[0][2]).toMatchObject({ damage: 6, dying: false, character: { health: 1 } })
   })
   it('shows a returnee killed during the same start step, even if it did not exist on the previous board', () => {
     const before = fixture()
@@ -93,7 +93,7 @@ describe('battle feedback without delayed game rules', () => {
     deng.health = 2
     before.players[0].pendingReturns = [deng]
     const result = run(before, { type: 'END_TURN', player: 1 }, 6)
-    expect(result.presentation!.boards[0][1]).toMatchObject({ damage: 2, dying: true, character: { instanceId: 'deng', returnCount: 1 } })
+    expect(result.presentation!.boards[0][1]).toMatchObject({ damage: 6, dying: true, character: { instanceId: 'deng', returnCount: 1 } })
     expect(result.state.players[0].pendingReturns[0]!.returnCount).toBe(2)
   })
   it('an immediate next-turn return is shown alive, not as an interactive dead ghost', () => {

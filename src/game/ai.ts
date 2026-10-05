@@ -49,7 +49,7 @@ function boardValue(player: PlayerState, enemy: PlayerState, definitions: Defini
     const card = definitions[character.definitionId]!
     let attack = effectiveAttack(character, player.board, definitions)
     if (card.abilityId === 'MAO_RANDOM_COMMAND') attack *= 0.5
-    if (card.abilityId === 'LIN_COUNTDOWN') attack *= (character.countdown ?? 3) <= 1 ? 0.45 : 0.8
+    if (card.abilityId === 'LIN_COUNTDOWN') attack *= (character.countdown ?? 2) <= 1 ? 0.45 : 0.8
     value += 1.5 + attack * 1.2 + Math.sqrt(character.health)
     if (card.abilityId === 'TOUGH') value += 1.2
     if (card.abilityId === 'ZHOU_MEDIATION') value += Math.min(3, player.board.length - 1)

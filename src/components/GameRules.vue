@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { characters } from '../data'
-import { ABILITIES } from '../data/abilities'
+import { ABILITIES, DENG_RECTIFICATION_NAME } from '../data/abilities'
 import { BOARD_LIMIT, GROUP_NAMES, INITIAL_HP, INITIAL_MANA, MAX_MANA } from '../game/rules'
 import type { AbilityId } from '../game/types'
 
@@ -17,10 +17,10 @@ const uniqueCharacters = characters.filter(card => card.rarity === 'SSR' && card
         <h3>开局与回合</h3>
         <ul>
           <li>双方初始生命为 {{ INITIAL_HP }}。{{ characters.length }} 张不同人物牌洗混后，随机分成两个 {{ characters.length / 2 }} 张牌库。</li>
-          <li>先手起手 3 张，后手 4 张；先手开始回合再抽 1 张。AI 对局随机先后手，双人对局玩家 1 先手。</li>
+          <li>先手起手 3 张，后手 4 张；先手开始回合再抽 1 张。AI 和联机对局都随机先后手；玩家 1 为先手。</li>
           <li>双方自己的第一回合都有 {{ INITIAL_MANA }} 点最大行动力，之后每个己方回合 +1，上限 {{ MAX_MANA }}。</li>
           <li>回合开始补满行动力并抽 1 张。牌库为空时跳过抽牌，没有疲劳伤害，也没有手牌上限。</li>
-          <li>双人模式结束回合后交接操作，确认准备好再显示手牌；AI 模式自动进行对方回合。</li>
+          <li>联机模式双方各用自己的浏览器：创建房间并分享 ID，另一人加入后自动开局。双方只看到自己的手牌；AI 模式自动进行对方回合。</li>
         </ul>
       </section>
       <section class="rules-panel">
@@ -69,12 +69,13 @@ const uniqueCharacters = characters.filter(card => card.rarity === 'SSR' && card
           <p>{{ ABILITIES[card.abilityId!].description }}</p>
         </article>
       </div>
-      <p><strong class="ability-name">「{{ ABILITIES.MAO_RANDOM_COMMAND.name }}」</strong> 不在登场时投骰，禁止攻击只影响毛泽东本人。</p>
-      <p><strong class="ability-name">「{{ ABILITIES.ZHOU_MEDIATION.name }}」</strong> 只在己方回合救另一名己方人物，不能救自己，也不能阻止直接死亡；周恩来可能因此死亡。</p>
-      <p><strong class="ability-name">「{{ ABILITIES.DENG_RETURN.name }}」</strong> 第四次死亡后不再复出；场地满时等待下一己方回合。被救下而没有死亡，不消耗复出次数。</p>
-      <p><strong class="ability-name">「{{ ABILITIES.LIN_COUNTDOWN.name }}」</strong> 登场回合结束也减计数，提前因战斗死亡不会爆炸。</p>
+      <p><strong class="ability-name">「{{ ABILITIES.MAO_RANDOM_COMMAND.name }}」</strong> 登场恢复生命不受 20 HP 限制；不在登场时投骰，禁止攻击只影响毛泽东本人。双方张玉凤都免疫骰 6 的伤害，但仍会受到其它来源的伤害。</p>
+      <p><strong class="ability-name">「{{ ABILITIES.ZHOU_MEDIATION.name }}」</strong> 在任一玩家的新回合开始时重置，因此对方回合也能救另一名己方人物；不能救自己，也不能阻止直接死亡。周恩来可能因此死亡；同时受到致命伤害时不能救人。</p>
+      <p><strong class="ability-name">「{{ ABILITIES.DENG_RETURN.name }}」</strong> 第四次死亡后不再复出；场地满时等待下一己方回合。被救下而没有死亡，不消耗复出次数。<strong class="ability-name">「{{ DENG_RECTIFICATION_NAME }}」</strong> 只加成复出时已在场的其他己方保守派，本回合结束时消失。</p>
+      <p><strong class="ability-name">「{{ ABILITIES.LIN_COUNTDOWN.name }}」</strong> 登场回合结束也减计数；归零、战斗或技能造成的死亡都会引发离场爆炸。被救到 1 HP 而未离场时不爆炸，归零死亡不能被救。爆炸可引发连锁死亡。</p>
+      <p><strong class="ability-name">「{{ ABILITIES.JIANG_BORROW_POWER.name }}」</strong> 抽取牌库顺序中的第一张造反派，其余牌顺序不变；没有造反派时跳过抽牌。攻击加成随己方毛泽东登场或离场即时变化，可以与同组加成叠加。</p>
     </section>
-    <p class="muted">派别、关系组与稀有度是游戏机制分类，不是对历史人物的正式定性或重要性评价。当前无联网对战、存档或组牌功能。</p>
+    <p class="muted">派别、关系组与稀有度是游戏机制分类，不是对历史人物的正式定性或重要性评价。联机需要互联网，断线后需重新开局；当前无存档或组牌功能。</p>
   </section>
 </template>
 

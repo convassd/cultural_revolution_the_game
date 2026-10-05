@@ -34,7 +34,8 @@ export function effectiveAttack(
   definitions: Readonly<Record<string, CharacterDefinition>>,
 ): number {
   const definition = definitions[character.definitionId]!
-  return Math.max(0, (character.attackOverride ?? definition.attack) + groupBonus(definition, board, definitions) + character.temporaryAttack)
+  const borrowedPower = definition.abilityId === 'JIANG_BORROW_POWER' && board.some(c => c.definitionId === 'mao_zedong' && c.health > 0) ? 2 : 0
+  return Math.max(0, (character.attackOverride ?? definition.attack) + groupBonus(definition, board, definitions) + borrowedPower + character.temporaryAttack)
 }
 
 export function effectiveFaction(

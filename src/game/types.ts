@@ -6,7 +6,7 @@ export type AbilityId =
   | 'TOUGH' | 'BUFF_ONE' | 'DRAW_ONE' | 'REVEAL_HAND'
   | 'GROUP_DRAW' | 'CHARGE' | 'WEAKEN' | 'GUARD'
   | 'MAO_RANDOM_COMMAND' | 'ZHOU_MEDIATION' | 'DENG_RETURN'
-  | 'LIN_COUNTDOWN' | 'JIANG_FULL_GROUP'
+  | 'LIN_COUNTDOWN' | 'JIANG_BORROW_POWER'
 
 export interface CharacterDefinition {
   type: 'character'
@@ -56,7 +56,6 @@ export interface GameState {
   winner: PlayerId | null
   nextInstanceId: number
   revealedHand: { viewer: PlayerId; owner: PlayerId; cards: string[] } | null
-  jiangTriggered: boolean
   log: string[]
   pendingPlayTarget: { cardId: string; targetIds: string[] } | null
 }

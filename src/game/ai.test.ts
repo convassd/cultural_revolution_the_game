@@ -115,7 +115,7 @@ describe('one-step greedy decisions', () => {
     expect(trade).toMatchObject({ type: 'ATTACK', target: { type: 'character', instanceId: 'defender' } })
     const saved = applyAction(state, trade, definitions).state
     expect(saved.players[0].hp).toBe(3)
-    expect(saved.players[0].board[0]!.health).toBe(5)
+    expect(saved.players[0].board[0]!.health).toBe(6)
     expect(saved.players[1].board).toEqual([])
     const face = applyAction(state, { type: 'ATTACK', player: 0, attackerId: 'attacker', target: { type: 'player' } }, definitions).state
     const nextTurn = applyAction(face, { type: 'END_TURN', player: 0 }, definitions).state

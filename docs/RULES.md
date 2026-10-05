@@ -1,13 +1,13 @@
 # Rules and abilities
 
-These are the frozen `v0.0` mechanics. English names below explain the Chinese game text; the game itself remains in Chinese.
+These are the current mechanics, including the five revised SSR abilities. English names below explain the Chinese game text; the game itself remains in Chinese.
 
 ## Setup and turns
 
 - Both players start with 20 HP. There are no hero classes or hero powers.
 - Shuffle all 48 unique characters, then divide them into two 24-card decks. Each character appears only once per game.
 - Seat 1 draws three starting cards; seat 2 draws four. The first turn draws one more, so both hands contain four cards when play begins.
-- Seat 1 opens in hot-seat mode. AI mode randomly assigns the human to either seat with equal probability. The human is always displayed at the bottom.
+- AI and online multiplayer randomly assign each player to either seat with equal probability. Seat 1 opens; your own hand and battlefield are always displayed at the bottom.
 - Each player's first turn has two maximum action points. Each later turn of that player increases the maximum by one, up to ten. Turn start refills the current amount and draws one card.
 - Empty decks skip draws. There is no fatigue damage or hand-size limit.
 - Each side has at most five characters in play. Playing pays the card's cost and removes it from the hand. There is no undo.
@@ -66,17 +66,17 @@ For targeted entry abilities, clicking Play immediately spends resources and pla
 
 ### Mao Zedong — `MAO_RANDOM_COMMAND`
 
-**最高指示 / Supreme Directive.** At each owner's turn start, roll one six-sided die:
+Seven cost, four attack, eight HP; Unaffiliated. **最高指示 / Supreme Directive.** On entry, heal the friendly player for five HP, with no cap at 20. At each owner's turn start, roll one six-sided die:
 
 - 1–2: Mao cannot attack this turn.
 - 3–5: Mao can attack normally.
-- 6: Deal two damage to every other character on both sides, then Mao cannot attack this turn.
+- 6: Deal six damage to every character on both sides except this Mao and every Zhang Yufeng, then Mao cannot attack this turn.
 
-The die does not directly restrict other friendly characters. There is no roll on entry.
+The die does not directly restrict other friendly characters. There is no roll on entry. Zhang Yufeng's immunity applies only to this six-damage effect; Lin's explosion can still damage her and Mao.
 
 ### Zhou Enlai — `ZHOU_MEDIATION`
 
-**调解 / Mediation.** During each owner's turn, the first other friendly character that would die from damage instead remains at one HP. Zhou takes two damage and can die from it. At most once per owner's turn; no trigger during the enemy turn, no self-rescue and no rescue from direct-death effects.
+Six cost, three attack, nine HP; Unaffiliated. **调解 / Mediation.** During either player's turn, the first other friendly character that would die from damage instead remains at one HP. Zhou takes two damage and can die from it. At most once per global turn, resetting at the start of either player's turn. No self-rescue and no rescue from direct-death effects. Zhou must survive the initial damage batch to mediate.
 
 ### Deng Xiaoping — `DENG_RETURN`
 
@@ -88,20 +88,22 @@ The die does not directly restrict other friendly characters. There is no roll o
 
 The fourth death goes to the discard pile permanently. Returned Deng rests that turn. If all five slots are occupied, the return waits until another owner's turn start. Mediation did not cause a death and does not consume a return.
 
+Each actual return also triggers **整顿 / Rectification**: other living friendly Conservatives already in play gain temporary attack equal to that return's number (+1, +2 or +3). The modifier stacks with other attack bonuses and expires at the current turn's end. It does not apply to Deng himself, other factions or characters played later that turn. A deferred return grants no bonus until Deng actually enters; the bonus remains for the turn even if Deng dies again.
+
 ### Lin Biao — `LIN_COUNTDOWN`
 
-**折戟沉沙 / A Shattered Halberd in the Sand.** Enter with a countdown of three. Each owner's turn end, including the entry turn, reduces it by one. At zero, Lin dies directly and all characters take two damage. Every Ye Qun and Lin Liguo on either side also dies directly. Ordinary combat death before zero does not cause the explosion.
+**折戟沉沙 / A Shattered Halberd in the Sand.** Enter with a countdown of two. Each owner's turn end, including the entry turn, reduces it by one. At zero, Lin dies directly. Any actual departure through death, whether from countdown, combat or an ability, deals two damage to all remaining characters on both sides. Every Ye Qun and Lin Liguo on either side also dies directly. Mediation saving Lin at one HP prevents departure and therefore prevents the explosion; countdown death bypasses Mediation. Departure effects can cause further deaths and returns.
 
-### Jiang Qing — `JIANG_FULL_GROUP`
+### Jiang Qing — `JIANG_BORROW_POWER`
 
-**四人帮集结 / Gang of Four Assembly.** The first time Jiang Qing, Zhang Chunqiao, Yao Wenyuan and Wang Hongwen are simultaneously on the same friendly battlefield, deal six damage to the enemy player. Once per game. The usual group aura still applies; Protection does not block the damage, which can end the game.
+Four cost, three attack, five HP. **借势 / Borrowed Power.** On entry, draw the first Rebel in deck order, leaving the other cards in their previous order. Skip the draw if none remain. While a living friendly Mao Zedong is in play, Jiang gains +2 attack as a dynamic aura. An enemy Mao grants no bonus. This stacks with her usual relationship-group aura and temporary attack modifiers; Mao leaving removes it immediately. Completing the Gang of Four no longer deals damage to the enemy player.
 
 ## Trigger and damage order
 
-- Turn start: increase/refill action points and draw; reset damage reduction and the active player's Mediation use; ready existing friendly characters; process friendly pending returns; roll Mao's directive. Returns happen after attack readiness is restored, so returnees rest.
+- Turn start: increase/refill action points and draw; reset damage reduction and both players' Mediation uses; ready existing friendly characters; process friendly pending returns and Rectification; roll Mao's directive. Returns happen after attack readiness is restored, so returnees rest.
 - Turn end: resolve Lin's countdown and explosion; clear temporary attack modifiers on both sides and the revealed-hand snapshot; switch the active player and begin the next turn.
-- For an entry play, finish its entry ability before checking the once-per-game full-group damage trigger.
-- Combat attack values are computed before damage. Area damage deducts HP simultaneously; process damage reduction, direct-death flags, Mediation, then removals and pending returns. Ability damage has no faction bonus.
+- Entry plays resolve their entry ability immediately, except mandatory target selection when a target is required. Mao's healing and Jiang's faction-specific draw do not require a target.
+- Combat attack values are computed before damage. Area damage deducts HP simultaneously; process damage reduction, direct-death flags, Mediation, then removals and pending returns. Remove a lethal batch before processing Lin's departure explosion; process any resulting deaths in the next wave. Each departure resolves once. Ability damage has no faction bonus.
 - Zhou must remain alive after the initial batch to mediate. If several allies would die, save the first eligible character in friendly battlefield order.
 - Direct deaths bypass damage reduction and Mediation. If a future direct-death ability targets Deng, his return rule still applies. Lin's current direct-death targets are only Lin, Ye Qun and Lin Liguo.
 - If Mao kills a Deng who just returned at turn start, that death schedules a later owner's turn, not another return during the same start phase.
@@ -112,6 +114,6 @@ Faction backgrounds use pale blue for Conservatives, pale red for Rebels, pale g
 
 Damage indicators show actual post-reduction damage; a fully reduced hit displays zero. Dead cards briefly stay in place, show cracks and shatter before survivors move together. Rules resolve immediately while animations play. Reduced-motion preferences suppress shaking, floating and fragments while preserving information.
 
-Enemy hands show backs and counts unless revealed. Hot-seat handoff hides the next player's hand until confirmation. This is a shared-screen convenience, not protection against browser developer tools.
+Enemy hands show backs and counts unless revealed. Multiplayer sends the guest only its own hand, with hidden deck contents and enemy-hand placeholders. The host runs the full state and remains trusted; this is casual P2P play rather than protection against host cheating.
 
-After final battle effects, the central result animation lasts about 3.6 seconds. AI games show **全面胜利** (Complete Victory) or **退出舞台** (Exit the Stage) from the human's perspective; hot-seat games show **玩家1胜利** or **玩家2胜利**. The turn bar retains the result after the animation fades. Sound is generated locally in the browser and stops on restart or exit.
+After final battle effects, the central result animation lasts about 3.6 seconds. Both AI and online games show **全面胜利** (Complete Victory) or **退出舞台** (Exit the Stage) from the local player's perspective. The turn bar retains the result after the animation fades. Sound is generated locally in the browser and stops on exit or AI restart. After an online match finishes, only the host can start a new match; both browsers keep their connection and receive newly randomized seats.

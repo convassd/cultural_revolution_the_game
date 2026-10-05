@@ -1,6 +1,7 @@
 import { resolveCombat } from './combat'
 import { BOARD_LIMIT, canAttackPlayer, effectiveAttack, effectiveFaction, INITIAL_HP, INITIAL_MANA, MAX_MANA, playTargets } from './rules'
-import { applyDamageBatch, beginCharacterTurn, checkFullGroup, createCharacter, endCharacterTurn, recordLog as log, removeDead } from './effects'
+import { applyDamageBatch, beginCharacterTurn, createCharacter, endCharacterTurn, recordLog as log, removeDead } from './effects'
+import { ABILITIES } from '../data/abilities'
 import type { ActionResult, CharacterDefinition, GameAction, GameEvent, GameState, PlayerId, PlayerState } from './types'
 
 export type RandomSource = () => number
@@ -46,7 +47,7 @@ export function createGame(cards: readonly CharacterDefinition[], random: Random
   }
   const state: GameState = {
     players: [player(0), player(1)], currentPlayer: 0, turn: 1,
-    winner: null, nextInstanceId: 1, revealedHand: null, jiangTriggered: false,
+    winner: null, nextInstanceId: 1, revealedHand: null,
     pendingPlayTarget: null,
     log: ['新游戏：双方各 24 张牌；先手起手 3 张，后手起手 4 张。'],
   }
@@ -91,6 +92,18 @@ export function applyAction(state: GameState, action: GameAction, definitions: D
       player.board.push(createCharacter(card, instanceId))
       log(next, `玩家 ${player.id + 1} 打出 ${card.name}（${card.cost} 行动力）。`)
       switch (card.abilityId) {
+        case 'MAO_RANDOM_COMMAND':
+          player.hp += 5
+          log(next, `${card.name}「${ABILITIES.MAO_RANDOM_COMMAND.name}」：玩家 ${player.id + 1} 恢复 5 HP，当前 ${player.hp} HP。`)
+          break
+        case 'JIANG_BORROW_POWER': {
+          const index = player.deck.findIndex(id => definitions[id]!.faction === '造反派')
+          if (index >= 0) {
+            player.hand.push(player.deck.splice(index, 1)[0]!)
+            log(next, `${card.name}「${ABILITIES.JIANG_BORROW_POWER.name}」：抽了 1 张造反派。`)
+          } else log(next, `${card.name}「${ABILITIES.JIANG_BORROW_POWER.name}」：牌库没有造反派，跳过抽牌。`)
+          break
+        }
         case 'DRAW_ONE':
           draw(next, player)
           break
@@ -110,7 +123,6 @@ export function applyAction(state: GameState, action: GameAction, definitions: D
           log(next, `${card.name}：玩家 ${player.id + 1} 查看了对方当前手牌。`)
           break
       }
-      if (!next.pendingPlayTarget) checkFullGroup(next, events)
       break
     }
     case 'SELECT_PLAY_TARGET': {
@@ -121,7 +133,6 @@ export function applyAction(state: GameState, action: GameAction, definitions: D
       if (!targetBoard.some(c => c.instanceId === action.targetId)) return reject('目标已经离场。')
       applyTargetedEntry(next, card, action.targetId, definitions)
       next.pendingPlayTarget = null
-      checkFullGroup(next, events)
       break
     }
     case 'ATTACK': {

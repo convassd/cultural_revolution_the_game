@@ -129,7 +129,7 @@ describe('SR battlecries', () => {
     expect(resolved).toEqual(play(state, cardId, targetId))
     expect(applyAction(resolved, selection, definitions).error).not.toBeNull()
   })
-  it('finishes the entry target before resolving a lethal full-group trigger', () => {
+  it('finishes the entry target with full-group aura but no removed face-damage trigger', () => {
     const state = fixture(['zhang_chunqiao'])
     state.players[0].board = ['jiang_qing', 'yao_wenyuan', 'wang_hongwen'].map(id => instance(id))
     state.players[1].hp = 6
@@ -137,10 +137,11 @@ describe('SR battlecries', () => {
     expect(committed.winner).toBeNull()
     const resolved = applyAction(committed, { type: 'SELECT_PLAY_TARGET', player: 0, targetId: 'jiang_qing' }, definitions)
     expect(resolved.error).toBeNull()
-    expect(resolved.state.winner).toBe(0)
+    expect(resolved.state.winner).toBeNull()
+    expect(resolved.state.players[1].hp).toBe(6)
     expect(resolved.state.pendingPlayTarget).toBeNull()
     expect(resolved.state).toEqual(play(state, 'zhang_chunqiao', 'jiang_qing'))
-    expect(resolved.events).toEqual([{ type: 'PLAYER_DAMAGED', playerId: 1, amount: 6 }])
+    expect(resolved.events).toEqual([])
   })
   it('targeted battlecries play normally and skip if their target side is empty', () => {
     for (const cardId of ['zhang_chunqiao', 'yao_wenyuan']) {

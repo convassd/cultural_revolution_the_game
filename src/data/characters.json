@@ -1,9 +1,9 @@
 [
-  {"type":"character","id":"mao_zedong","name":"毛泽东","rarity":"SSR","faction":"无派别","cost":7,"attack":4,"health":12,"relationGroup":null,"abilityId":"MAO_RANDOM_COMMAND","image":"/portraits/mao_zedong.svg"},
-  {"type":"character","id":"zhou_enlai","name":"周恩来","rarity":"SSR","faction":"保守派","cost":6,"attack":3,"health":9,"relationGroup":null,"abilityId":"ZHOU_MEDIATION","image":"/portraits/zhou_enlai.svg"},
+  {"type":"character","id":"mao_zedong","name":"毛泽东","rarity":"SSR","faction":"无派别","cost":7,"attack":4,"health":8,"relationGroup":null,"abilityId":"MAO_RANDOM_COMMAND","image":"/portraits/mao_zedong.svg"},
+  {"type":"character","id":"zhou_enlai","name":"周恩来","rarity":"SSR","faction":"无派别","cost":6,"attack":3,"health":9,"relationGroup":null,"abilityId":"ZHOU_MEDIATION","image":"/portraits/zhou_enlai.svg"},
   {"type":"character","id":"deng_xiaoping","name":"邓小平","rarity":"SSR","faction":"保守派","cost":5,"attack":2,"health":3,"relationGroup":null,"abilityId":"DENG_RETURN","image":"/portraits/deng_xiaoping.svg"},
   {"type":"character","id":"lin_biao","name":"林彪","rarity":"SSR","faction":"军队","cost":6,"attack":5,"health":6,"relationGroup":"lin_group","abilityId":"LIN_COUNTDOWN","image":"/portraits/lin_biao.svg"},
-  {"type":"character","id":"jiang_qing","name":"江青","rarity":"SSR","faction":"造反派","cost":4,"attack":3,"health":5,"relationGroup":"gang_of_four","abilityId":"JIANG_FULL_GROUP","image":"/portraits/jiang_qing.svg"},
+  {"type":"character","id":"jiang_qing","name":"江青","rarity":"SSR","faction":"造反派","cost":4,"attack":3,"health":5,"relationGroup":"gang_of_four","abilityId":"JIANG_BORROW_POWER","image":"/portraits/jiang_qing.svg"},
   {"type":"character","id":"liu_shaoqi","name":"刘少奇","rarity":"SR","faction":"保守派","cost":5,"attack":4,"health":7,"relationGroup":null,"abilityId":"TOUGH","image":"/portraits/liu_shaoqi.svg"},
   {"type":"character","id":"zhang_chunqiao","name":"张春桥","rarity":"SR","faction":"造反派","cost":4,"attack":4,"health":5,"relationGroup":"gang_of_four","abilityId":"BUFF_ONE","image":"/portraits/zhang_chunqiao.svg"},
   {"type":"character","id":"chen_boda","name":"陈伯达","rarity":"SR","faction":"造反派","cost":4,"attack":3,"health":5,"relationGroup":null,"abilityId":"DRAW_ONE","image":"/portraits/chen_boda.svg"},
