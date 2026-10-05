@@ -46,7 +46,7 @@ Tests cover this counterexample and prioritizing a lethal sequence of face attac
 3. Address opening advantage separately, for example one extra temporary action point on the second seat's first turn. Apply the same rules to human and AI seats.
 4. Raising HP alone is insufficient. The 30/40 HP experiments increased second-seat greedy wins only to 36.0%/44.5%, so more HP cannot be presented as a complete fix.
 
-Start by evaluating the first experiment, tracking face attacks, voluntary trades and wins by seat. The actual v0.0 game still uses its original rules.
+Start by evaluating the first experiment, tracking face attacks, voluntary trades and wins by seat. The original v0.0.0 prototype used the earlier rules; the current game has the revised SSR abilities described in the rules guide.
 
 ## Reproduce
 

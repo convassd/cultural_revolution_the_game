@@ -1,4 +1,4 @@
-:root { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; color: #f0e9d8; background: #132321; font-synthesis: none; }
+:root { --card-width: 174px; --card-height: calc(var(--card-width) * 4 / 3); font-family: system-ui, -apple-system, "Segoe UI", sans-serif; color: #f0e9d8; background: #132321; font-synthesis: none; }
 * { box-sizing: border-box; }
 body { margin: 0; }
 button { font: inherit; cursor: pointer; border: 1px solid #8b846b; border-radius: 7px; padding: 9px 15px; background: #354642; color: #f8f0de; }
@@ -33,22 +33,8 @@ h2 { font-size: 17px; margin-top: 0; } p { line-height: 1.65; }
 .battlefield { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; min-width: 650px; }
 .empty-slot { min-height: 262px; display: flex; flex-direction: column; justify-content: center; align-items: center; border: 1px dashed #577364; border-radius: 10px; color: #7b9584; background: #172f2866; }
 .empty-slot span { font-size: 26px; opacity: .6; }.empty-slot small { font-size: 11px; }
-.character-card { --card-bg: #e5dcc7; --card-hover: #f1e7d0; width: 100%; min-width: 0; padding: 7px; border: 2px solid #9c947e; border-radius: 11px; background: var(--card-bg); color: #302f29; text-align: left; display: flex; flex-direction: column; box-shadow: 0 4px 7px #071a2055; transition: border-color .12s; }
-.character-card:hover:not(:disabled) { background: var(--card-hover); border-color: #f6d079; }
-.character-card.faction-conservative { --card-bg: #d9e1e5; --card-hover: #e3e9eb; }
-.character-card.faction-rebel { --card-bg: #e7d7d0; --card-hover: #eee1db; }
-.character-card.faction-military { --card-bg: #dae0ce; --card-hover: #e5e8db; }
-.character-card.sr { border-color: #73988f; }.character-card.ssr { border-color: #c29b4e; }
-.character-card.selected { outline: 3px solid #f1ce78; outline-offset: 2px; }
-.card-heading { display: flex; align-items: center; gap: 5px; margin-bottom: 6px; min-height: 25px; }.card-heading strong { font-size: 14px; white-space: nowrap; }.rarity { margin-left: auto; font-size: 10px; font-weight: 700; color: #726043; }
-.cost { display: grid; place-items: center; background: #436a80; color: white; width: 25px; height: 25px; border-radius: 50%; font-weight: 700; flex-shrink: 0; }
-.portrait { position: relative; }.portrait img { display: block; width: 100%; aspect-ratio: 5/3; object-fit: cover; border-radius: 4px; }.faction { position: absolute; bottom: 4px; right: 4px; background: #323a30; color: #eee5c8; padding: 2px 5px; border-radius: 3px; font-size: 11px; }
-.skill-text { flex: 1; min-height: 101px; padding: 8px 2px 4px; font-size: 11px; line-height: 1.4; }.skill-text p { margin: 5px 0; font-size: 11px; line-height: 1.4; }.skill-text small { font-size: 10px; color: #716249; display: block; margin-top: 5px; }
-.pending { display: inline-block; margin-left: 4px; padding: 1px 3px; font-size: 9px; color: #855746; background: #d9c6aa; border-radius: 3px; }.no-skill { color: #877c66; }
-.card-stats { display: flex; justify-content: space-between; align-items: center; border-top: 1px solid #bcb097; padding-top: 5px; }.card-stats small { font-size: 10px; color: #6b695c; }.attack, .health { font-size: 17px; font-weight: 800; }.attack { color: #856022; }.attack.buffed { color: #2e7b45; }.health { color: #9a3d34; }
 .turn-bar { margin: 0; padding: 8px 0; border-top: 1px solid #496353; border-bottom: 1px solid #496353; }.turn-bar b { color: #edcb85; }.turn-bar small { display: block; margin-top: 5px; font-size: 12px; color: #afbcac; }
-.targeting .character-card { border-color: #dc9273; }
-.hand { display: flex; gap: 12px; overflow-x: auto; padding: 6px 4px 13px; min-height: 280px; }.hand .character-card { width: 174px; flex: 0 0 174px; }
+.hand { display: flex; gap: 12px; overflow-x: auto; padding: 6px 4px 13px; min-height: 280px; }.hand .character-card { flex: 0 0 var(--card-width); }
 .sidebar section { border: 1px solid #3b5448; background: #1a3029; border-radius: 12px; padding: 17px; margin-bottom: 16px; }
 .game-log { list-style: none; margin: 0; padding: 0; max-height: 250px; overflow-y: auto; }.game-log li { font-size: 12px; line-height: 1.6; padding: 9px 0; border-bottom: 1px solid #3a5143; color: #c2ccba; }.game-log li:first-child { color: #f1d798; }
 .ability-name { color: #e9c380; font-weight: 700; }.muted { color: #aab7a6; font-size: 12px; }.error { color: #ffb7a8; }.selection-hint { margin: 0 0 8px; }
@@ -64,17 +50,12 @@ footer { text-align: center; font-size: 11px; color: #889e8c; padding: 24px 0 0;
 .card-gallery { padding: 24px; background: #203b34; border: 1px solid #587367; border-radius: 16px; }
 .gallery-heading { display: flex; align-items: center; justify-content: space-between; gap: 20px; }
 .gallery-heading h2 { font-size: 24px; margin: 0; }
-.gallery-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(185px, 1fr)); gap: 18px; margin-top: 24px; }
-.gallery-grid .character-card { cursor: default; }
-.gallery-grid .skill-text { min-height: 120px; }
-.attack.debuffed { color: #a44038; }
+.gallery-grid { display: grid; grid-template-columns: repeat(auto-fill, var(--card-width)); justify-content: center; gap: 18px; margin-top: 24px; }
 .target-prompt { background: #455040; border: 1px solid #c7a764; border-radius: 7px; padding: 10px 14px; font-size: 13px; color: #f7d992; }
 .gallery-controls { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; margin: 20px 0; padding: 14px; background: #162e27; border-radius: 8px; }
 .gallery-controls label { display: flex; align-items: center; gap: 8px; font-size: 13px; }
 .gallery-controls select { font: inherit; color: #eee4ca; background: #354642; border: 1px solid #8b846b; border-radius: 5px; padding: 7px 10px; }
 .gallery-controls select:focus-visible { outline: 2px solid #f0c66d; outline-offset: 2px; }
-.card-state-tags { display: flex; gap: 4px; flex-wrap: wrap; padding-bottom: 6px; }
-.card-state-tags span { background: #fff7; color: #554e3f; border-radius: 3px; padding: 2px 4px; font-size: 10px; }
 .board-card { position: relative; display: grid; min-width: 0; min-height: 262px; isolation: isolate; }
 .board-card-face { height: 100%; }
 .board-card.taking-damage .board-card-face { animation: card-hit 340ms ease-out; }
@@ -107,10 +88,8 @@ footer { text-align: center; font-size: 11px; color: #889e8c; padding: 24px 0 0;
 }
 
 
-/* All match cards share one portrait card shape, independent of row width. */
+/* Card faces live in CharacterCard.vue; these rules only arrange the match. */
 .match-view {
-  --card-width: 174px;
-  --card-height: calc(var(--card-width) * 4 / 3);
   --player-width: 170px;
   --field-width: calc(var(--card-width) * 5 + 32px);
   --table-width: calc(var(--player-width) + var(--field-width) + 30px);
@@ -126,27 +105,10 @@ footer { text-align: center; font-size: 11px; color: #889e8c; padding: 24px 0 0;
 .battle-cards { min-width: 0; overflow-x: auto; padding: 5px; }
 .match-view .battlefield { grid-template-columns: repeat(5, var(--card-width)); width: var(--field-width); min-width: 0; gap: 8px; }
 .match-view .board-card, .match-view .empty-slot { width: var(--card-width); height: var(--card-height); min-height: 0; }
-.match-view .character-card { width: var(--card-width); height: var(--card-height); min-height: 0; padding: 4px; }
-.match-view .card-heading { min-height: 22px; gap: 3px; margin-bottom: 3px; flex-shrink: 0; }
-.match-view .card-heading strong { font-size: 14px; }
-.match-view .rarity { font-size: 11px; }
-.match-view .cost { width: 21px; height: 21px; font-size: 14px; }
-.match-view .portrait { flex-shrink: 0; height: calc(var(--card-height) * .32); background: #303a3022; border-radius: 4px; }
-.match-view .portrait img { height: 100%; width: auto; max-width: 100%; margin-inline: auto; aspect-ratio: 5 / 3; }
-.match-view .skill-text { min-height: 0; overflow: hidden; padding: 4px 1px 2px; font-size: 12px; }
-.match-view .skill-text p { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; font-size: 11px; line-height: 1.35; margin: 3px 0; }
-.match-view .skill-text small { font-size: 11px; margin-top: 2px; }
-.match-view .card-state-tags { position: absolute; top: 2px; left: 2px; right: 2px; flex-wrap: nowrap; overflow: hidden; padding: 0; }
-.match-view .card-state-tags span { font-size: 10px; white-space: nowrap; }
-.match-view .card-stats { padding-top: 3px; flex-shrink: 0; gap: 2px; line-height: 1.2; }
-.match-view .card-stats small { font-size: 11px; white-space: nowrap; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.match-view .attack, .match-view .health { font-size: 18px; white-space: nowrap; flex-shrink: 0; }
-.match-view .faction { font-size: 11px; bottom: 2px; right: 2px; padding: 1px 3px; }
 .match-view .hand { min-height: 0; gap: 8px; padding: 4px; align-items: flex-start; scrollbar-width: thin; }
 .match-view .hand::-webkit-scrollbar { height: 8px; }
 .match-view .hand::-webkit-scrollbar-thumb { background: #718578; border-radius: 4px; }
 .match-view .hand::-webkit-scrollbar-track { background: #142b26; border-radius: 4px; }
-.match-view .hand .character-card { flex: 0 0 var(--card-width); }
 .battle-divider { margin: 8px 0; }
 .table-status { display: flex; align-items: center; gap: 12px; min-width: 0; }
 .opponent-hand-cards { display: flex; align-items: center; gap: 3px; min-width: 0; overflow-x: auto; scrollbar-width: thin; }
@@ -171,9 +133,9 @@ footer { text-align: center; font-size: 11px; color: #889e8c; padding: 24px 0 0;
 .match-view .player-metrics { font-size: 13px; }
 .match-view .player-identity small { font-size: 12px; }
 
-/* The compact battlefield and full-width hand share only their card dimensions. */
+/* Gallery, battlefield and hand inherit the same viewport-sized card dimensions. */
 @media (min-width: 900px) {
-  .match-view {
+  :root {
     --card-width: min(calc((100dvh - 178px) / 4), calc((100vw - 268px) / 5), 210px);
   }
   .match-view .page-header { height: 34px; margin-bottom: 8px; }
@@ -210,8 +172,6 @@ footer { text-align: center; font-size: 11px; color: #889e8c; padding: 24px 0 0;
   .sidebar .game-log { max-height: calc(var(--card-height) * 2); }
 }
 @media (min-width: 900px) and (max-height: 700px) {
-  .match-view .skill-text p { -webkit-line-clamp: 1; margin: 2px 0; }
-  .match-view .skill-text small { display: none; }
   .battle-row .player-area { gap: 3px; padding: 5px; }
   .battle-row .player-identity { gap: 4px; font-size: 13px; }
   .battle-row .player-avatar { width: 22px; height: 22px; }
@@ -220,9 +180,7 @@ footer { text-align: center; font-size: 11px; color: #889e8c; padding: 24px 0 0;
   .battle-row .player-metrics .hp { font-size: 22px; line-height: 1.1; }
   .battle-row .danger-button { padding: 3px; font-size: 12px; }
 }
-@media (min-width: 900px) and (max-height: 620px) {
-  .match-view .skill-text p:not(.no-skill) { display: none; }
-}
+
 @media (max-width: 899px) {
   main { padding: 12px; }
   .page-header { gap: 12px; flex-wrap: wrap; }

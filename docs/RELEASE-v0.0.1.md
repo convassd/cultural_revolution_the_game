@@ -1,8 +1,8 @@
-# Wen Ge Sha v0.1
+# Cultural Revolution: The Game v0.0.1
 
 [Play in your browser](https://convassd.github.io/cultural_revolution_the_game/)
 
-This update improves the interface while retaining the v0.0 combat and balance rules.
+This update improves the interface while retaining the v0.0.0 combat and balance rules. It was previously called v0.1; the release tag points to the original commit without rewriting historical source labels.
 
 - A compact desktop battlefield with player information beside each row and a separate, wider hand area.
 - Matching 3:4 battlefield and hand cards, larger match text, and a fixed-width action panel.

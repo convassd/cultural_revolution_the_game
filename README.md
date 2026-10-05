@@ -1,10 +1,10 @@
-# Wen Ge Sha · v0.2
+# Cultural Revolution: The Game · v0.1.1
 
 A small browser card game set around characters from China's Cultural Revolution. Built with Vue 3, Vite and TypeScript as a personal learning and entertainment project.
 
 **[Click to play it now](https://convassd.github.io/cultural_revolution_the_game/)**
 
-The game interface is in Simplified Chinese; repository documentation is in English. See the [v0.2 release notes](docs/RELEASE-v0.2.md) for online multiplayer and the revised SSR abilities.
+The game interface is in Simplified Chinese; repository documentation is in English. See the [v0.1.1 release notes](docs/RELEASE-v0.1.1.md) for the shared card template and favicon, and [v0.1.0](docs/RELEASE-v0.1.0.md) for online multiplayer and the revised SSR abilities.
 
 ## What is included
 
@@ -30,7 +30,7 @@ See [Rules and abilities](docs/RULES.md) for complete mechanics and English desc
 
 See [Multiplayer setup, testing and troubleshooting](docs/MULTIPLAYER.md) for two-window and two-device tests, connection limits and the host-authoritative design.
 
-On desktop, player information sits beside each battlefield row, with turn information on the left. Battlefield cards and hand cards share a fixed 3:4 shape and scale to the available viewport height. The compact battlefield stays centered, while a separate hand area spans the browser's available width and fits its contents with minimal padding. A narrow control column aligns its top and bottom with the hand cards, placing the selected card's cost and current resources above Play character, with End Turn at the bottom. Both battlefield rows and your hand fit typical landscape browser viewports. Long hands scroll horizontally; hover over skill text for the complete description and relationship name. The log sits on the right when there is room beside the battlefield and moves below the hand otherwise. Narrow screens retain a vertical layout with swipeable card rows and a non-blocking portrait orientation hint.
+On desktop, player information sits beside each battlefield row, with turn information on the left. Gallery, battlefield and hand cards share one card-face template, a fixed 3:4 shape and the same viewport-based dimensions. The compact battlefield stays centered, while a separate hand area spans the browser's available width and fits its contents with minimal padding. A narrow control column aligns its top and bottom with the hand cards, placing the selected card's cost and current resources above Play character, with End Turn at the bottom. Both battlefield rows and your hand fit typical landscape browser viewports. Long hands scroll horizontally; hover over skill text for the complete description and relationship name. The log sits on the right when there is room beside the battlefield and moves below the hand otherwise. Narrow screens retain a vertical layout with swipeable card rows and a non-blocking portrait orientation hint.
 
 ## Run locally
 
@@ -56,7 +56,7 @@ The production website is written to `dist/`. Serve it over HTTP, rather than op
 
 The repository includes a [Pages workflow](.github/workflows/pages.yml). Every push to `main` installs locked dependencies, runs tests, checks types, builds the game and deploys only `dist/`. Pull requests run the same verification without publishing.
 
-For the initial repository setup, authentication, Pages settings and the `v0.0` release, follow the [deployment guide](docs/DEPLOYMENT.md). No custom domain, separate website repository or manually maintained build branch is needed.
+For repository setup, authentication, Pages settings and tagged releases, follow the [deployment guide](docs/DEPLOYMENT.md). No custom domain, separate website repository or manually maintained build branch is needed.
 
 ## Project structure
 

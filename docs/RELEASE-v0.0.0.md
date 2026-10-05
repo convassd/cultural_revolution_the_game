@@ -1,4 +1,4 @@
-# Wen Ge Sha v0.0
+# Cultural Revolution: The Game v0.0.0
 
 [Play in your browser](https://convassd.github.io/cultural_revolution_the_game/)
 
@@ -14,4 +14,4 @@ The first playable browser prototype, with a Simplified Chinese interface.
 
 Desktop browsers are the current focus. Balance is provisional; online multiplayer, saves, deck building and mobile adaptation are not included.
 
-The v0.0 gameplay is frozen. GitHub Pages serves the latest verified build from the main branch.
+This release records the original prototype previously called v0.0. Its tag points to the original commit; historical source labels are preserved. GitHub Pages serves the latest verified build from the main branch.

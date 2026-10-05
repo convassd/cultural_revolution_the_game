@@ -37,6 +37,8 @@ The AI does not search opponent responses or future turns. Unknown turn-start di
 
 ## Presentation
 
+`CharacterCard.vue` owns the shared card-face markup and scoped visual styles. The gallery, hand, battlefield and death fragments all render this component. `style.css` defines one viewport-based card width and proportional 3:4 height, inherited by every view; the gallery grid only arranges fixed-size cards and never stretches them to fill a row. Change the component to replace the card template everywhere, and change the shared dimension variables to adjust its size everywhere.
+
 Damage, death and return events become temporary presentation snapshots. These preserve pre-action positions while a dead card shatters. They use actual damage events, including reduction and replacement effects, rather than inferring damage from HP differences or parsing logs.
 
 Timers live in the UI; animations do not delay rule resolution. The UI temporarily locks further actions while battle effects play, then shows a result banner and plays its tone once when a winner exists. Restart, Back and unmount clean up pending effects, AI timers and audio.

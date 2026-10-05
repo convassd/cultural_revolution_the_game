@@ -1,8 +1,8 @@
-# Wen Ge Sha v0.2
+# Cultural Revolution: The Game v0.1.0
 
 [Play in your browser](https://convassd.github.io/cultural_revolution_the_game/)
 
-This update introduces online multiplayer and revises all five SSR abilities. Local AI battles remain available.
+This update introduces online multiplayer and revises all five SSR abilities. Local AI battles remain available. It was previously called v0.2; the release tag points to the original commit without rewriting historical source labels.
 
 ## Online multiplayer
 

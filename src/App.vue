@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onUnmounted, ref, shallowRef } from 'vue'
+import { version } from '../package.json'
 import Battlefield from './components/Battlefield.vue'
 import CardGallery from './components/CardGallery.vue'
 import GameRules from './components/GameRules.vue'
@@ -219,7 +220,7 @@ function attack(target: { type: 'player' } | { type: 'character'; instanceId: st
 <template>
   <main :class="{ 'match-view': view === 'game' }">
     <header class="page-header">
-      <div><span class="eyebrow">CARD DUEL · v0.1</span><h1>文革杀 <span>{{ view === 'game' ? (mode === 'ai' ? '玩家 vs 贪心 AI' : '双人联机') : view === 'home' ? '横扫一切牛鬼蛇神' : view === 'rules' ? '游戏规则' : view === 'lobby' ? '双人联机' : '了解卡牌' }}</span></h1></div>
+      <div><span class="eyebrow">CULTURAL REVOLUTION: THE GAME · v{{ version }}</span><h1>文革杀 <span>{{ view === 'game' ? (mode === 'ai' ? '玩家 vs 贪心 AI' : '双人联机') : view === 'home' ? '横扫一切牛鬼蛇神' : view === 'rules' ? '游戏规则' : view === 'lobby' ? '双人联机' : '了解卡牌' }}</span></h1></div>
       <div v-if="view !== 'home'" class="header-actions"><span v-if="view === 'game' && mode === 'online'" class="connection-status">{{ onlineStatus.phase === 'closed' ? '连接中断' : `${onlineStatus.isHost ? '房主' : '加入者'} · 已连接` }}</span><button v-if="view === 'game' && mode === 'ai'" @click="startGame">重新开始</button><button v-if="view === 'game' && mode === 'online' && onlineStatus.isHost && game?.winner !== null" :disabled="!onlineStatus.ready" @click="online?.rematch()">再来一局</button><button @click="exit">返回</button></div>
     </header>
     <section v-if="view === 'home'" class="welcome">

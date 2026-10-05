@@ -1,4 +1,4 @@
-# Publish v0.0 to GitHub Pages
+# Publish Cultural Revolution: The Game
 
 Target repository: [convassd/cultural_revolution_the_game](https://github.com/convassd/cultural_revolution_the_game)
 
@@ -19,7 +19,7 @@ Sign in as `convassd` and open [New repository](https://github.com/new?owner=con
 - Owner: `convassd`.
 - Repository name: `cultural_revolution_the_game`.
 - Visibility: **Public**, so the free GitHub Pages option can be used.
-- Suggested description: `A browser-based character card duel with hot-seat and local AI modes.`
+- Suggested description: `A browser-based character card duel with online multiplayer and local AI battles.`
 - Leave automatic README, .gitignore and license initialization unchecked. The local project already contains its release files.
 
 Create the repository. If it already exists with commits, do not follow the empty-repository push commands below blindly; inspect its contents first.
@@ -49,7 +49,7 @@ Replace the email placeholder; do not run that line unchanged. Then:
 ```sh
 git add .
 git diff --cached --stat
-git commit -m "Release v0.0 browser prototype"
+git commit -m "Release v0.0.0 browser prototype"
 git remote add origin https://github.com/convassd/cultural_revolution_the_game.git
 git push -u origin main
 ```
@@ -73,17 +73,30 @@ Pushes to `main` deploy; pull requests only verify. All Actions are pinned to co
 
 When deployment succeeds, open the website with its trailing slash. The repository README's **Click to play it now** link points to that address. You can also put the website URL in the repository's **About** section.
 
-## 4. Publish the v0.0 release
+## 4. Publish tagged releases
 
-On GitHub, open **Releases → Draft a new release**:
+GitHub Pages deployments and GitHub Releases are separate. A successful Pages deployment does not create a Release. Releases attach a title and notes to a Git tag, recording a source snapshot.
 
-- Tag: create `v0.0`, targeting the verified `main` commit.
-- Title: `Wen Ge Sha v0.0`.
-- Description: copy [RELEASE-v0.0.md](RELEASE-v0.0.md).
-- Select **This is a pre-release**, since this is an initial playable prototype.
-- Publish when ready.
+The project uses three-part versions. The earlier informal labels are mapped to their original commits without rewriting Git history:
 
-The release tag records the v0.0 source. Pages continues to serve the latest successfully deployed `main` build; a release tag alone does not change the website. There is no need to upload `node_modules/` or commit `dist/`.
+| Tag | Target | Release notes |
+| --- | --- | --- |
+| `v0.0.0` | Original prototype, `ffc0e2d` (formerly v0.0) | [RELEASE-v0.0.0.md](RELEASE-v0.0.0.md) |
+| `v0.0.1` | Interface update, `5d18846` (formerly v0.1) | [RELEASE-v0.0.1.md](RELEASE-v0.0.1.md) |
+| `v0.1.0` | Multiplayer and SSR rules, `271f8cb` (formerly v0.2) | [RELEASE-v0.1.0.md](RELEASE-v0.1.0.md) |
+| `v0.1.1` | Shared card template, favicon and version cleanup | [RELEASE-v0.1.1.md](RELEASE-v0.1.1.md) |
+
+For each release, open **Releases → Draft a new release**:
+
+- Choose its existing tag. If creating a tag manually, target the correct verified commit; do not point every historical tag at the latest `main`.
+- Title: `Cultural Revolution: The Game vX.Y.Z`.
+- Description: copy the matching release notes above. Relative documentation links should be made absolute when pasting notes into GitHub's release form.
+- These are ordinary published releases during initial development. Use the pre-release checkbox only when intentionally publishing a preview; a `0.x.y` version does not require that checkbox.
+- Set only the current release as **Latest**, then publish.
+
+Keep `package.json`, its root entry in `package-lock.json`, README and release notes consistent. The page reads its version label directly from `package.json`. A documentation-only edit does not require a new version automatically; choose a patch for a small published fix or presentation update, and a minor version for a substantial feature update. Leave existing published tags at their recorded commits.
+
+Pages continues to serve the latest successfully deployed `main` build; a release tag alone does not change the website. GitHub provides source archives for tagged releases, so no binary attachment is needed for this browser game. There is no need to upload `node_modules/` or commit `dist/`.
 
 ## Verify the published site
 
