@@ -10,6 +10,7 @@ const props = defineProps<{
   disabled: boolean
   status: string
   details: string[]
+  effectOnly?: boolean
 }>()
 defineEmits<{ select: [] }>()
 const cardProps = computed(() => ({
@@ -32,7 +33,7 @@ const fragments = [
 
 <template>
   <div class="board-card" :class="{ 'taking-damage': presentation.damage !== null, dying: presentation.dying, returning: presentation.returned }">
-    <CharacterCard class="board-card-face" v-bind="cardProps" :selected="selected" :disabled="disabled || presentation.dying" @select="$emit('select')" />
+    <CharacterCard v-if="!effectOnly || presentation.dying" class="board-card-face" v-bind="cardProps" :selected="selected" :disabled="disabled || presentation.dying" @select="$emit('select')" />
     <template v-if="presentation.dying">
       <svg class="death-cracks" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><path d="M50 0L38 40L52 65L60 100M0 32L38 40L100 35M0 70L52 65L100 65" /></svg>
       <div class="death-fragments" aria-hidden="true" inert>

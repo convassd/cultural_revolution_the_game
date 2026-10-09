@@ -85,6 +85,7 @@ The project uses three-part versions. The earlier informal labels are mapped to 
 | `v0.0.1` | Interface update, `5d18846` (formerly v0.1) | [RELEASE-v0.0.1.md](RELEASE-v0.0.1.md) |
 | `v0.1.0` | Multiplayer and SSR rules, `271f8cb` (formerly v0.2) | [RELEASE-v0.1.0.md](RELEASE-v0.1.0.md) |
 | `v0.1.1` | Shared card template, favicon and version cleanup | [RELEASE-v0.1.1.md](RELEASE-v0.1.1.md) |
+| `v0.2.0` | Shared events, AI 2.0, hand refill and nonblocking battle feedback | [RELEASE-v0.2.0.md](RELEASE-v0.2.0.md) |
 
 For each release, open **Releases → Draft a new release**:
 

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { ABILITIES, isAbilityImplemented } from '../data/abilities'
+import { FACTION_CLASSES } from '../presentation/factions'
 import { GROUP_NAMES } from '../game/rules'
 import type { CharacterDefinition, Faction } from '../game/types'
 
@@ -16,16 +17,13 @@ const props = defineProps<{
 }>()
 defineEmits<{ select: [] }>()
 const ability = computed(() => props.card.abilityId ? ABILITIES[props.card.abilityId] : null)
-const factionClasses: Record<Faction, string> = {
-  '保守派': 'faction-conservative', '造反派': 'faction-rebel', '军队': 'faction-military', '无派别': 'faction-neutral',
-}
 const currentFaction = computed(() => props.faction ?? props.card.faction)
 // JSON paths stay easy to replace; the build also works below a host subdirectory.
 const portrait = computed(() => `${import.meta.env.BASE_URL}${props.card.image.replace(/^\//, '')}`)
 </script>
 
 <template>
-  <button type="button" class="character-card" :class="[card.rarity.toLowerCase(), factionClasses[currentFaction], { selected }]"
+  <button type="button" class="character-card" :class="[card.rarity.toLowerCase(), FACTION_CLASSES[currentFaction], { selected }]"
     :disabled="disabled" :aria-pressed="selected ?? false" :aria-label="`${card.name}，费用 ${card.cost}，攻击 ${attack ?? card.attack}，生命 ${health ?? card.health}`"
     @click="$emit('select')">
     <div class="card-heading"><span class="cost" title="费用">{{ card.cost }}</span><strong>{{ card.name }}</strong><span class="rarity">{{ card.rarity }}</span></div>

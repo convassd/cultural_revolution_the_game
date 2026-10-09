@@ -91,7 +91,7 @@ describe('online connection lifecycle and synchronization', () => {
     expect(host.frame.revision).toBe(guest.frame.revision)
     expect(host.status.ready && guest.status.ready).toBe(true)
   })
-  it('waits for both presentation acknowledgements before accepting any action', async () => {
+  it('waits for both state acknowledgements before accepting any action', async () => {
     const { host, guest } = await pair(false, false)
     expect(host.status.ready || guest.status.ready).toBe(false)
     host.session.submit({ type: 'END_TURN', player: 0 }); await flush()
@@ -198,6 +198,7 @@ describe('online connection lifecycle and synchronization', () => {
       const actor = host.frame.state.currentPlayer === host.frame.seat ? host : guest
       const legal = legalTurnActions(actor.frame.state, definitions)
       const action = legal.find(a => a.type === 'SELECT_PLAY_TARGET') ??
+        legal.find(a => a.type === 'USE_EVENT') ??
         legal.find(a => a.type === 'ATTACK' && a.target.type === 'player') ??
         legal.find(a => a.type === 'ATTACK') ??
         legal.filter(a => a.type === 'PLAY_CARD').sort((a, b) => definitions[b.cardId]!.cost - definitions[a.cardId]!.cost)[0] ??
@@ -209,6 +210,8 @@ describe('online connection lifecycle and synchronization', () => {
       expect(host.frame.state.players.map(p => p.board)).toEqual(guest.frame.state.players.map(p => p.board))
       expect(host.frame.state.players.map(p => p.hp)).toEqual(guest.frame.state.players.map(p => p.hp))
       expect(host.frame.state.log).toEqual(guest.frame.state.log)
+      expect(host.frame.state.eventPool).toEqual(guest.frame.state.eventPool)
+      expect(host.frame.state.eventPool.deck.every(id => id === '')).toBe(true)
       expect(host.errors).toEqual([]); expect(guest.errors).toEqual([])
     }
     expect(actions).toBeLessThan(1500)

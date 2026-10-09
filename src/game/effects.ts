@@ -1,5 +1,5 @@
 import { resolveDamage } from './combat'
-import { BOARD_LIMIT, effectiveFaction } from './rules'
+import { BOARD_LIMIT, effectiveFaction, LIN_INITIAL_COUNTDOWN } from './rules'
 import { ABILITIES, DENG_RECTIFICATION_NAME } from '../data/abilities'
 import type { CharacterDefinition, CharacterInstance, GameEvent, GameState } from './types'
 
@@ -17,7 +17,7 @@ export function createCharacter(card: CharacterDefinition, instanceId: string): 
     instanceId, definitionId: card.id, health: card.health,
     canAttack: card.abilityId === 'CHARGE', temporaryAttack: 0, toughUsed: false,
   }
-  if (card.abilityId === 'LIN_COUNTDOWN') character.countdown = 2
+  if (card.abilityId === 'LIN_COUNTDOWN') character.countdown = LIN_INITIAL_COUNTDOWN
   if (card.abilityId === 'DENG_RETURN') character.returnCount = 0
   return character
 }
@@ -81,7 +81,7 @@ export function removeDead(state: GameState, definitions: Definitions, events: G
             ...character, returnCount: count, health: count === 3 ? 1 : 2,
             attackOverride: count === 1 ? 2 : 1,
             factionOverride: count >= 2 ? '无派别' : effectiveFaction(character, definitions),
-            canAttack: false, temporaryAttack: 0, toughUsed: false,
+            canAttack: false, temporaryAttack: 0, attackModifiers: [], toughUsed: false,
           })
           recordLog(state, `邓小平等待下一己方回合进行第 ${count} 次复出。`)
         } else player.discard.push(character.definitionId)
@@ -110,6 +110,7 @@ export function beginCharacterTurn(state: GameState, definitions: Definitions, r
     // Returnees enter after existing characters ready, so they still rest this turn.
     character.canAttack = false
     character.temporaryAttack = 0
+    character.attackModifiers = []
     character.toughUsed = false
     player.board.push(character)
     events.push({ type: 'CHARACTER_RETURNED', playerId: player.id, character: structuredClone(character) })
@@ -145,7 +146,7 @@ export function endCharacterTurn(state: GameState, definitions: Definitions, eve
   const countdowns = player.board.filter(c => definitions[c.definitionId]!.abilityId === 'LIN_COUNTDOWN')
   for (const lin of countdowns) {
     if (lin.health <= 0 || !player.board.includes(lin)) continue
-    lin.countdown = Math.max(0, (lin.countdown ?? 2) - 1)
+    lin.countdown = Math.max(0, (lin.countdown ?? LIN_INITIAL_COUNTDOWN) - 1)
     recordLog(state, `林彪「${ABILITIES.LIN_COUNTDOWN.name}」：${lin.countdown}。`)
     if (lin.countdown !== 0) continue
     lin.health = 0

@@ -41,11 +41,11 @@ describe('data and setup', () => {
     expect(input).toEqual([1, 2, 3, 4])
     expect(fixture()).toEqual(fixture())
   })
-  it('deals 24 unique cards each; the opening turn draws after the 3/4 deal', () => {
+  it('deals five starting cards to each seat without an extra opening draw', () => {
     const state = fixture()
     expect(state.players.map(p => p.hp)).toEqual([20, 20])
-    expect(state.players.map(p => p.hand.length)).toEqual([4, 4])
-    expect(state.players.map(p => p.deck.length)).toEqual([20, 20])
+    expect(state.players.map(p => p.hand.length)).toEqual([5, 5])
+    expect(state.players.map(p => p.deck.length)).toEqual([19, 19])
     const all = state.players.flatMap(p => [...p.hand, ...p.deck])
     expect(new Set(all).size).toBe(48)
     expect(state.players[0].mana).toBe(2)
@@ -118,10 +118,65 @@ describe('turns and playing', () => {
   it('empty decks skip draws without fatigue', () => {
     const state = fixture()
     state.players[1].deck = []
+    state.players[1].hand = ['wu_han']
     const next = act(state, { type: 'END_TURN', player: 0 })
     expect(next.players[1].hp).toBe(20)
-    expect(next.players[1].hand).toHaveLength(4)
+    expect(next.players[1].hand).toEqual(['wu_han'])
     expect(next.log.at(-1)).toContain('牌库已空')
+  })
+  it.each([0, 2, 4])('refills an incoming hand of %i cards to five in deck order, without mutating either player in the input', count => {
+    const state = fixture()
+    state.players[1].hand = state.players[1].hand.slice(0, count)
+    state.players[1].mana = 0
+    state.players[1].maxMana = 4
+    const before = structuredClone(state)
+    const next = act(state, { type: 'END_TURN', player: 0 })
+    expect(next.players[1].hand).toEqual([...before.players[1].hand, ...before.players[1].deck.slice(0, 5 - count)])
+    expect(next.players[1].deck).toEqual(before.players[1].deck.slice(5 - count))
+    expect(next.players[1]).toMatchObject({ mana: 5, maxMana: 5 })
+    expect(next.players[0].hand).toEqual(before.players[0].hand)
+    expect(state).toEqual(before)
+  })
+  it.each([5, 6, 8])('keeps an incoming hand of %i cards without drawing or discarding', count => {
+    const state = fixture()
+    state.players[1].hand.push(...state.players[1].deck.splice(0, count - 5))
+    const before = structuredClone(state.players[1])
+    const next = act(state, { type: 'END_TURN', player: 0 })
+    expect(next.players[1].hand).toEqual(before.hand)
+    expect(next.players[1].deck).toEqual(before.deck)
+    expect(next.players[1].discard).toEqual(before.discard)
+  })
+  it('draws only the available cards when a refill exhausts the deck', () => {
+    const state = fixture()
+    state.players[1].hand = []
+    state.players[1].deck = ['wu_han', 'lin_liguo']
+    const next = act(state, { type: 'END_TURN', player: 0 })
+    expect(next.players[1].hand).toEqual(['wu_han', 'lin_liguo'])
+    expect(next.players[1].deck).toEqual([])
+    expect(next.players[1].hp).toBe(20)
+    expect(next.log.filter(line => line.includes('牌库已空'))).toHaveLength(1)
+  })
+  it('refills after mana recovery but before Deng returns and Mao rolls', () => {
+    const state = fixture()
+    state.currentPlayer = 1
+    state.players[0].hand = ['zhou_enlai']
+    state.players[0].deck = ['wu_han', 'lin_liguo', 'chen_yi', 'nie_yuanzi', 'zhu_de']
+    state.players[0].board = [instance('mao_zedong')]
+    state.players[0].pendingReturns = [{ ...instance('deng_xiaoping'), returnCount: 1, health: 2, attackOverride: 2 }]
+    const next = act(state, { type: 'END_TURN', player: 1 })
+    expect(next.players[0].hand).toEqual(['zhou_enlai', 'wu_han', 'lin_liguo', 'chen_yi', 'nie_yuanzi'])
+    expect(next.players[0].deck).toEqual(['zhu_de'])
+    expect(next.players[0].pendingReturns).toEqual([])
+    const logs = next.log.slice(state.log.length)
+    const mana = logs.findIndex(line => line.includes('行动力'))
+    const firstDraw = logs.findIndex(line => line.includes('抽了'))
+    const lastDraw = logs.map(line => line.includes('抽了')).lastIndexOf(true)
+    const returned = logs.findIndex(line => line.includes('次复出'))
+    const rolled = logs.findIndex(line => line.includes('指令骰'))
+    expect(mana).toBeGreaterThanOrEqual(0)
+    expect(mana).toBeLessThan(firstDraw)
+    expect(lastDraw).toBeLessThan(returned)
+    expect(returned).toBeLessThan(rolled)
   })
 })
 

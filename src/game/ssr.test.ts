@@ -257,8 +257,12 @@ describe('邓小平复出整顿', () => {
 })
 
 describe('林彪离场爆炸', () => {
-  it('starts at two and expires after two own turn ends, including entry', () => {
+  it('starts at three and expires after three own turn ends, including entry', () => {
     let state = act(fixture(['lin_biao']), { type: 'PLAY_CARD', player: 0, cardId: 'lin_biao' })
+    expect(state.players[0].board[0]!.countdown).toBe(3)
+    state = end(state)
+    expect(state.players[0].board[0]!.countdown).toBe(2)
+    state = end(state)
     expect(state.players[0].board[0]!.countdown).toBe(2)
     state = end(state)
     expect(state.players[0].board[0]!.countdown).toBe(1)
@@ -302,7 +306,7 @@ describe('林彪离场爆炸', () => {
     state.players[0].board[0]!.health = 1
     state.players[1].board = [unit('wu_han', 'victim'), unit('chen_yi', 'other')]
     const next = attack(state, 'lin', 'victim')
-    expect(next.players[0].board[0]).toMatchObject({ health: 1, countdown: 2 })
+    expect(next.players[0].board[0]).toMatchObject({ health: 1, countdown: 3 })
     expect(next.players[0].board[1]!.health).toBe(7)
     expect(next.players[1].board[0]!.health).toBe(5)
     expect(next.log.some(line => line.includes('离场爆炸'))).toBe(false)

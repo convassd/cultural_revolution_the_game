@@ -1,11 +1,12 @@
 import { characters, definitions } from '../data'
+import { eventCards } from '../data/events'
 import { applyAction, createGame, type RandomSource } from '../game/engine'
-import { BOARD_LIMIT, INITIAL_HP, INITIAL_MANA, MAX_MANA } from '../game/rules'
+import { BOARD_LIMIT, EVENT_UNLOCK_TURN, INITIAL_HAND_SIZE, INITIAL_HP, INITIAL_MANA, LIN_INITIAL_COUNTDOWN, MAX_MANA, TARGET_HAND_SIZE } from '../game/rules'
 import type { GameAction, GameEvent, GameState, PlayerId } from '../game/types'
 
-export const PROTOCOL = 'wen-ge-sha-p2p-2'
+export const PROTOCOL = 'wen-ge-sha-p2p-6'
 // Change the protocol when engine behavior or wire semantics change incompatibly.
-export const RULESET = JSON.stringify([characters, BOARD_LIMIT, INITIAL_HP, INITIAL_MANA, MAX_MANA])
+export const RULESET = JSON.stringify([characters, eventCards, EVENT_UNLOCK_TURN, LIN_INITIAL_COUNTDOWN, BOARD_LIMIT, INITIAL_HP, INITIAL_MANA, MAX_MANA, INITIAL_HAND_SIZE, TARGET_HAND_SIZE])
 export const HIDDEN_CARD = ''
 
 export interface OnlineFrame {
@@ -34,6 +35,7 @@ const identifier = (value: unknown): value is string => typeof value === 'string
 export function readAction(value: unknown, seat: PlayerId): GameAction | null {
   if (!isRecord(value) || value.player !== seat) return null
   switch (value.type) {
+    case 'USE_EVENT': return identifier(value.eventId) ? { type: 'USE_EVENT', player: seat, eventId: value.eventId } : null
     case 'END_TURN': return { type: 'END_TURN', player: seat }
     case 'PLAY_CARD':
       if (!identifier(value.cardId) || (value.targetId !== undefined && !identifier(value.targetId))) return null
@@ -53,6 +55,7 @@ export function readAction(value: unknown, seat: PlayerId): GameAction | null {
 // This is a display snapshot, not input for applyAction.
 export function projectState(state: GameState, viewer: PlayerId): GameState {
   const view = structuredClone(state)
+  view.eventPool.deck.fill(HIDDEN_CARD)
   for (const player of view.players) {
     player.deck = player.deck.map(() => HIDDEN_CARD)
     if (player.id !== viewer) player.hand = player.hand.map(() => HIDDEN_CARD)

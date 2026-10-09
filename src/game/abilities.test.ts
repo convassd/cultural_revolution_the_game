@@ -4,7 +4,7 @@ import { isAbilityImplemented } from '../data/abilities'
 import { resolveCombat } from './combat'
 import { applyAction, createGame } from './engine'
 import { canAttackPlayer, effectiveAttack, GROUP_NAMES, playTargets } from './rules'
-import type { CharacterInstance, GameAction, GameState } from './types'
+import type { CharacterInstance, GameAction, GameState, PlayerId } from './types'
 
 function instance(id: string, instanceId = id): CharacterInstance {
   return { definitionId: id, instanceId, health: definitions[id]!.health,
@@ -44,6 +44,17 @@ describe('SR battlecries', () => {
     expect(next.players[0].hand).toEqual([])
     expect(next.players[0].board).toHaveLength(1)
     expect(next.log.at(-1)).toContain('牌库已空')
+  })
+  it('DRAW_ONE still draws at five remaining cards; six cards are retained without a next-turn refill', () => {
+    const state = fixture(['chen_boda', 'mao_zedong', 'zhou_enlai', 'zhu_de', 'lin_biao', 'jiang_qing'])
+    state.players[0].deck = ['wu_han', 'lin_liguo']
+    let next = play(state, 'chen_boda')
+    expect(next.players[0].hand).toEqual(['mao_zedong', 'zhou_enlai', 'zhu_de', 'lin_biao', 'jiang_qing', 'wu_han'])
+    expect(next.players[0].deck).toEqual(['lin_liguo'])
+    next = act(next, { type: 'END_TURN', player: 0 })
+    next = act(next, { type: 'END_TURN', player: 1 })
+    expect(next.players[0].hand).toHaveLength(6)
+    expect(next.players[0].deck).toEqual(['lin_liguo'])
   })
   it('GROUP_DRAW ignores itself, enemy members and unrelated friendly characters', () => {
     const state = fixture(['ye_qun'])
@@ -125,7 +136,7 @@ describe('SR battlecries', () => {
     const selection: GameAction = { type: 'SELECT_PLAY_TARGET', player: 0, targetId }
     const resolved = act(committed, selection)
     expect(resolved.pendingPlayTarget).toBeNull()
-    expect(resolved.players[owner].board[0]!.temporaryAttack).toBe(change)
+    expect(effectiveAttack(resolved.players[owner].board[0]!, resolved.players[owner].board, definitions)).toBe(definitions[resolved.players[owner].board[0]!.definitionId]!.attack + change)
     expect(resolved).toEqual(play(state, cardId, targetId))
     expect(applyAction(resolved, selection, definitions).error).not.toBeNull()
   })
@@ -152,7 +163,7 @@ describe('SR battlecries', () => {
       expect(next.log.at(-1)).toContain('跳过')
     }
   })
-  it('WEAKEN lowers retaliation and expires at end of the casting turn', () => {
+  it('WEAKEN lowers retaliation and remains through the enemy turn', () => {
     const state = fixture(['yao_wenyuan'])
     state.players[0].board = [instance('wu_han', 'a')]
     state.players[1].board = [instance('wu_han', 'b')]
@@ -162,6 +173,8 @@ describe('SR battlecries', () => {
     expect(next.players[0].board[0]!.health).toBe(2)
     expect(next.players[1].board[0]!.health).toBe(1)
     next = act(next, { type: 'END_TURN', player: 0 })
+    expect(effectiveAttack(next.players[1].board[0]!, next.players[1].board, definitions)).toBe(1)
+    next = act(next, { type: 'END_TURN', player: 1 })
     expect(effectiveAttack(next.players[1].board[0]!, next.players[1].board, definitions)).toBe(2)
   })
   it('temporary penalties stack, floor displayed attack at zero, and expire together', () => {
@@ -171,9 +184,12 @@ describe('SR battlecries', () => {
     state.players[1].board = [target]
     state = play(state, 'yao_wenyuan', 'b')
     state = play(state, 'guan_feng', 'b')
-    expect(state.players[1].board[0]!.temporaryAttack).toBe(-3)
+    expect(state.players[1].board[0]!.temporaryAttack).toBe(-1)
+    expect(state.players[1].board[0]!.attackModifiers).toEqual([{ amount: -1, expiresAtTurn: 3 }, { amount: -1, expiresAtTurn: 3 }])
     expect(effectiveAttack(state.players[1].board[0]!, state.players[1].board, definitions)).toBe(0)
     state = act(state, { type: 'END_TURN', player: 0 })
+    expect(effectiveAttack(state.players[1].board[0]!, state.players[1].board, definitions)).toBe(0)
+    state = act(state, { type: 'END_TURN', player: 1 })
     expect(effectiveAttack(state.players[1].board[0]!, state.players[1].board, definitions)).toBe(2)
   })
   it('REVEAL_HAND records only a snapshot for the caster and clears on handoff', () => {
@@ -283,5 +299,82 @@ describe('renames and skill status', () => {
     expect(playTargets(definitions.zhang_chunqiao!, state.players[0], state.players[1])).toEqual(['a'])
     expect(playTargets(definitions.yao_wenyuan!, state.players[0], state.players[1])).toEqual(['b'])
     expect(playTargets(definitions.chen_boda!, state.players[0], state.players[1])).toEqual([])
+  })
+})
+
+describe('turn-relative attack durations', () => {
+  it.each([0, 1] as const)('gives caster seat %s the same retaliation reduction and one full enemy action turn', caster => {
+    const enemy: PlayerId = caster === 0 ? 1 : 0
+    let state = fixture()
+    state.currentPlayer = caster
+    state.turn = caster + 1
+    state.players[caster].mana = 10
+    state.players[caster].hand = ['yao_wenyuan']
+    state.players[caster].board = [instance('wu_han', 'ally')]
+    state.players[enemy].board = [instance('wu_han', 'target')]
+    const original = structuredClone(state)
+    state = act(state, { type: 'PLAY_CARD', player: caster, cardId: 'yao_wenyuan', targetId: 'target' })
+    expect(original.players[enemy].board[0]!.attackModifiers).toBeUndefined()
+    expect(state.players[enemy].board[0]!.attackModifiers).toEqual([{ amount: -1, expiresAtTurn: caster + 3 }])
+    state = act(state, { type: 'ATTACK', player: caster, attackerId: 'ally', target: { type: 'character', instanceId: 'target' } })
+    expect(state.players[caster].board[0]!.health).toBe(2)
+    state = act(state, { type: 'END_TURN', player: caster })
+    expect(state.currentPlayer).toBe(enemy)
+    expect(effectiveAttack(state.players[enemy].board[0]!, state.players[enemy].board, definitions)).toBe(1)
+    state = act(state, { type: 'ATTACK', player: enemy, attackerId: 'target', target: { type: 'player' } })
+    expect(state.players[caster].hp).toBe(19)
+    state = act(state, { type: 'END_TURN', player: enemy })
+    expect(state.currentPlayer).toBe(caster)
+    expect(effectiveAttack(state.players[enemy].board[0]!, state.players[enemy].board, definitions)).toBe(2)
+    expect(state.players[enemy].board[0]!.attackModifiers).toEqual([])
+  })
+  it.each([0, 1] as const)('keeps short buffs separate from seat %s lasting debuffs', caster => {
+    const enemy: PlayerId = caster === 0 ? 1 : 0
+    let state = fixture()
+    state.currentPlayer = caster
+    state.turn = caster + 1
+    state.players[caster].mana = 10
+    state.players[caster].hand = ['yao_wenyuan', 'guan_feng']
+    state.players[enemy].board = [instance('wu_han', 'target')]
+    for (const cardId of ['yao_wenyuan', 'guan_feng']) state = act(state, { type: 'PLAY_CARD', player: caster, cardId, targetId: 'target' })
+    state = act(state, { type: 'END_TURN', player: caster })
+    state.players[enemy].mana = 10
+    state.players[enemy].hand = ['zhang_chunqiao']
+    state = act(state, { type: 'PLAY_CARD', player: enemy, cardId: 'zhang_chunqiao', targetId: 'target' })
+    expect(effectiveAttack(state.players[enemy].board[0]!, state.players[enemy].board, definitions)).toBe(1)
+    state = act(state, { type: 'ATTACK', player: enemy, attackerId: 'target', target: { type: 'player' } })
+    expect(state.players[caster].hp).toBe(19)
+    state = act(state, { type: 'END_TURN', player: enemy })
+    expect(effectiveAttack(state.players[enemy].board[0]!, state.players[enemy].board, definitions)).toBe(2)
+    expect(state.players[enemy].board[0]!.temporaryAttack).toBe(0)
+    state.players[caster].hand = ['guan_feng']
+    state.players[caster].mana = 10
+    state = act(state, { type: 'PLAY_CARD', player: caster, cardId: 'guan_feng', targetId: 'target' })
+    expect(effectiveAttack(state.players[enemy].board[0]!, state.players[enemy].board, definitions)).toBe(1)
+  })
+  it('keeps the debuff after its source leaves play', () => {
+    let state = fixture(['yao_wenyuan'])
+    state.players[1].board = [instance('wu_han', 'target'), instance('zhu_de', 'killer')]
+    state = play(state, 'yao_wenyuan', 'target')
+    const source = state.players[0].board[0]!.instanceId
+    state = act(state, { type: 'END_TURN', player: 0 })
+    state = act(state, { type: 'ATTACK', player: 1, attackerId: 'killer', target: { type: 'character', instanceId: source } })
+    expect(state.players[0].board).toHaveLength(0)
+    expect(effectiveAttack(state.players[1].board[0]!, state.players[1].board, definitions)).toBe(1)
+    state = act(state, { type: 'END_TURN', player: 1 })
+    expect(effectiveAttack(state.players[1].board[0]!, state.players[1].board, definitions)).toBe(2)
+  })
+  it('does not carry a debuff across death and Deng return', () => {
+    let state = fixture(['yao_wenyuan'])
+    state.players[0].board = [instance('wu_han', 'attacker')]
+    state.players[1].board = [instance('deng_xiaoping', 'deng')]
+    state.players[1].board[0]!.health = 1
+    state = play(state, 'yao_wenyuan', 'deng')
+    state = act(state, { type: 'ATTACK', player: 0, attackerId: 'attacker', target: { type: 'character', instanceId: 'deng' } })
+    expect(state.players[1].pendingReturns[0]!.attackModifiers).toEqual([])
+    state = act(state, { type: 'END_TURN', player: 0 })
+    const returned = state.players[1].board[0]!
+    expect(returned).toMatchObject({ returnCount: 1, canAttack: false })
+    expect(effectiveAttack(returned, state.players[1].board, definitions)).toBe(2)
   })
 })

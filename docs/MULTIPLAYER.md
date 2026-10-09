@@ -13,7 +13,7 @@ The approach follows [ArcoMage HD's multiplayer mode](https://github.com/arcomag
 5. In window B, select **双人联机**, paste the ID into **朋友的房间 ID**, then select **加入房间** (Join room). Pressing Enter in the field also submits.
 6. Both windows should enter the match automatically. The host may go first or second; each browser shows **你** (You) at the bottom and only its own hand. Exactly one player has an enabled **结束回合** (End turn) button.
 7. End the first player's turn. The other window should draw one card, refill resources and enable its actions without a handoff screen. Play an affordable card; it should appear as a friendly card locally and an enemy card in the other window.
-8. In later turns, attack a character and attack the player. Check matching HP, deaths, faction damage, relationship bonuses and logs. Both windows should show damage/death effects and wait for both presentations before allowing the next action.
+8. In later turns, attack a character and attack the player. Check matching HP, deaths, faction damage, relationship bonuses and logs. Both windows should show damage/death effects; after state synchronization the next legal action is allowed while earlier effects continue. End a turn and check that only the incoming local player hears the short cue, once controls are available.
 9. Test an entry-target skill: the card enters and spends resources immediately, then only its owner can choose a highlighted target. Test Kang Sheng: enemy card names replace backs only for the caster, then disappear on the caster's next selection or action.
 10. Finish the match. The winner sees **全面胜利**, the loser **退出舞台**. The host can select **再来一局** (Play again) after synchronization; both windows receive a new match and randomized seats.
 11. In either window, select **返回** (Back), refresh or close the page. The other window must report disconnection and disable actions. Return to the menu and create a new room to play again.
@@ -52,7 +52,7 @@ See the [PeerJS guide](https://peerjs.com/client/getting-started), [Peer API](ht
 - **Room does not exist:** check the copied ID and keep the host page open. Every new room has a new ID.
 - **Connection timeout:** try another network or browser. There is no TURN fallback.
 - **Different versions:** refresh both pages and retry. The handshake checks the wire protocol and card/rule data; incompatible engine updates must increment the protocol identifier.
-- **Waiting for synchronization:** wait for the other browser's animations. Keep both pages open and devices awake. After a disconnect, return to the menu and create a new room.
+- **Waiting for synchronization:** wait for both browsers to receive and acknowledge the new state; animations do not hold the acknowledgement. Keep both pages open and devices awake. After a disconnect, return to the menu and create a new room.
 
 Automated tests cover host authority, seat binding, privacy, stale requests, acknowledgements, lifecycle and UI behavior. Manual cross-network tests remain necessary to assess the public services and the players' NAT/firewall conditions.
 

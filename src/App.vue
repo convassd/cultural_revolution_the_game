@@ -8,24 +8,30 @@ import Hand from './components/Hand.vue'
 import MatchResult from './components/MatchResult.vue'
 import OnlineLobby from './components/OnlineLobby.vue'
 import PlayerArea from './components/PlayerArea.vue'
+import EventMarket from './components/EventMarket.vue'
+import { FACTION_CLASSES } from './presentation/factions'
+import { eventDefinitions } from './data/events'
 import { characters, definitions } from './data'
 import { ABILITIES } from './data/abilities'
 import { applyAction, createGame } from './game/engine'
-import { chooseGreedyAction } from './game/ai'
-import { BOARD_LIMIT, canAttackPlayer } from './game/rules'
-import type { GameAction, GameState, PlayerId } from './game/types'
+import { AiClient } from './ai/client'
+import { BOARD_LIMIT, EVENT_UNLOCK_TURN, canAttackPlayer } from './game/rules'
+import type { GameAction, GameEvent, GameState, PlayerId } from './game/types'
 import { BATTLE_EFFECT_DURATION, createBattlePresentation } from './presentation/battle'
-import type { BattlePresentation } from './presentation/battle'
-import { prepareResultAudio, stopResultAudio } from './presentation/resultSound'
+import type { BattleEffect } from './presentation/battle'
+import { playTurnSound, prepareResultAudio, stopResultAudio } from './presentation/resultSound'
 import { OnlineSession, idleStatus } from './online/session'
 import type { OnlineFrame } from './online/protocol'
 
 const game = shallowRef<GameState | null>(null)
-const presentation = shallowRef<BattlePresentation | null>(null)
+const effects = shallowRef<BattleEffect[]>([])
 const displayPlayer = ref<PlayerId>(0)
 const humanPlayer = ref<PlayerId>(0)
-let effectTimer: ReturnType<typeof setTimeout> | undefined
+const effectTimers = new Set<ReturnType<typeof setTimeout>>()
+let nextEffectId = 0
+let turnCuePending = false
 let aiTimer: ReturnType<typeof setTimeout> | undefined
+let ai: AiClient | null = null
 const mode = ref<'online' | 'ai'>('ai')
 const view = ref<'home' | 'cards' | 'rules' | 'lobby' | 'game'>('home')
 const onlineStatus = shallowRef(idleStatus())
@@ -33,6 +39,7 @@ let online: OnlineSession | null = null
 let onlineMatchId = ''
 const selectedHand = ref<string | null>(null)
 const selectedAttacker = ref<string | null>(null)
+const selectedEvent = ref<string | null>(null)
 const error = ref('')
 const showHandReveal = ref(false)
 const current = computed(() => game.value?.players[displayPlayer.value])
@@ -43,7 +50,7 @@ const handReveal = computed(() => {
 })
 const aiTurn = computed(() => mode.value === 'ai' && !!game.value && game.value.currentPlayer !== humanPlayer.value)
 const humanTurn = computed(() => !!game.value && game.value.currentPlayer === humanPlayer.value)
-const enabled = computed(() => humanTurn.value && game.value?.winner === null && !presentation.value &&
+const enabled = computed(() => humanTurn.value && game.value?.winner === null &&
   (mode.value !== 'online' || (onlineStatus.value.phase === 'playing' && onlineStatus.value.ready)))
 const pendingTarget = computed(() => humanTurn.value ? game.value?.pendingPlayTarget : null)
 const attackReady = computed(() => enabled.value && !pendingTarget.value && !!current.value?.board.find(c => c.instanceId === selectedAttacker.value)?.canAttack)
@@ -53,20 +60,24 @@ const selectedCard = computed(() => {
 })
 const canPlay = computed(() => enabled.value && !pendingTarget.value && selectedCard.value && current.value &&
   current.value.mana >= selectedCard.value.cost && current.value.board.length < BOARD_LIMIT)
+const selectedEventCard = computed(() => selectedEvent.value ? eventDefinitions[selectedEvent.value] : null)
+const canUseEvent = computed(() => enabled.value && !pendingTarget.value && game.value && current.value &&
+  game.value.turn >= EVENT_UNLOCK_TURN && !game.value.eventPool.usedThisTurn && selectedEventCard.value &&
+  game.value.eventPool.slots.includes(selectedEventCard.value.id) && current.value.mana >= selectedEventCard.value.cost)
 const recentLog = computed(() => game.value ? [...game.value.log].reverse() : [])
 const legalTargets = computed(() => pendingTarget.value?.targetIds ?? [])
 const guarded = computed(() => opponent.value && !canAttackPlayer(opponent.value, definitions))
 const turnHint = computed(() => {
-  if (presentation.value) return '正在显示伤害与离场效果，请稍候。'
   if (mode.value === 'online') {
     if (onlineStatus.value.phase === 'closed') return '连接已中断，请返回首页重新联机。'
     if (!onlineStatus.value.ready) return '等待双方同步…'
     if (!humanTurn.value && game.value?.winner === null) return '等待对方行动；你的手牌保留显示。'
   }
-  if (aiTurn.value && game.value?.winner === null) return '贪心 AI 正在行动；你的手牌保留显示，操作暂停。'
+  if (aiTurn.value && game.value?.winner === null) return 'AI 2.0 正在行动；你的手牌保留显示，操作暂停。'
   if (pendingTarget.value) return selectedCard.value?.abilityId === 'BUFF_ONE'
     ? `「${ABILITIES.BUFF_ONE.name}」：点击另一名己方角色（休息中的角色也可以）。`
     : `「${ABILITIES.WEAKEN.name}」：点击一名敌方角色。`
+  if (selectedEventCard.value) return selectedEventCard.value.description
   if (selectedAttacker.value && !attackReady.value) return '该角色当前不能攻击。'
   if (attackReady.value) return guarded.value
     ? `敌方「${ABILITIES.GUARD.name}」在场，不能直接攻击玩家；可以攻击任意敌方角色。`
@@ -78,10 +89,11 @@ function clearSelection() {
   showHandReveal.value = false
   selectedHand.value = null
   selectedAttacker.value = null
+  selectedEvent.value = null
   error.value = ''
 }
 function playerName(id: PlayerId) {
-  return `${id === humanPlayer.value ? '你' : mode.value === 'ai' ? '贪心 AI' : '对方'}（玩家 ${id + 1}）`
+  return `${id === humanPlayer.value ? '你' : mode.value === 'ai' ? 'AI 2.0' : '对方'}（玩家 ${id + 1}）`
 }
 function startGame() {
   online?.destroy()
@@ -108,7 +120,7 @@ function connectOnline(roomId?: string) {
   clearSelection()
   online?.destroy()
   const session = new OnlineSession({
-    onStatus: status => { if (online === session) onlineStatus.value = status },
+    onStatus: status => { if (online === session) { onlineStatus.value = status; maybePlayTurnCue() } },
     onFrame: frame => { if (online === session) receiveOnline(frame) },
     onError: message => { if (online === session) error.value = message },
   })
@@ -128,14 +140,12 @@ function receiveOnline(frame: OnlineFrame) {
   view.value = 'game'
   clearSelection()
   showHandReveal.value = frame.reveal
-  presentation.value = before ? createBattlePresentation(before, frame.state, frame.events, definitions) : null
-  if (presentation.value) {
-    effectTimer = setTimeout(() => {
-      presentation.value = null
-      effectTimer = undefined
-      online?.ready()
-    }, BATTLE_EFFECT_DURATION)
-  } else online?.ready()
+  if (before) {
+    appendEffects(before, frame.state, frame.events)
+    markTurnCue(before, frame.state)
+  }
+  online?.ready()
+  maybePlayTurnCue()
 }
 function exit() {
   online?.destroy()
@@ -148,12 +158,36 @@ function exit() {
   clearSelection()
 }
 function resetPresentation(keepAudio = false) {
-  clearTimeout(effectTimer)
+  for (const timer of effectTimers) clearTimeout(timer)
+  effectTimers.clear()
   clearTimeout(aiTimer)
-  effectTimer = undefined
   aiTimer = undefined
-  presentation.value = null
+  ai?.destroy()
+  ai = null
+  effects.value = []
+  turnCuePending = false
   if (!keepAudio) stopResultAudio()
+}
+function appendEffects(before: GameState, after: GameState, events: GameEvent[]) {
+  const presentation = createBattlePresentation(before, after, events, definitions)
+  if (!presentation) return
+  const id = ++nextEffectId
+  effects.value = [...effects.value, { ...presentation, id }]
+  const timer = setTimeout(() => {
+    effects.value = effects.value.filter(effect => effect.id !== id)
+    effectTimers.delete(timer)
+  }, BATTLE_EFFECT_DURATION)
+  effectTimers.add(timer)
+}
+function boardEffects(id: PlayerId) { return effects.value.map(effect => ({ id: effect.id, slots: effect.boards[id] })) }
+function playerEffects(id: PlayerId) {
+  return effects.value.flatMap(effect => effect.playerDamage[id] === null ? [] : [{ id: effect.id, amount: effect.playerDamage[id]! }])
+}
+function markTurnCue(before: GameState, after: GameState) {
+  if (before.currentPlayer !== humanPlayer.value && after.currentPlayer === humanPlayer.value && after.winner === null) turnCuePending = true
+}
+function maybePlayTurnCue() {
+  if (turnCuePending && enabled.value) { turnCuePending = false; playTurnSound() }
 }
 onUnmounted(() => { online?.destroy(); resetPresentation() })
 function send(action: GameAction) {
@@ -170,26 +204,22 @@ function perform(action: GameAction) {
   game.value = result.state
   clearSelection()
   showHandReveal.value = action.type === 'PLAY_CARD' && definitions[action.cardId]?.abilityId === 'REVEAL_HAND'
-  presentation.value = createBattlePresentation(before, result.state, result.events, definitions)
-  if (presentation.value) {
-    effectTimer = setTimeout(() => {
-      presentation.value = null
-      effectTimer = undefined
-      scheduleAi()
-    }, BATTLE_EFFECT_DURATION)
-  } else {
-    scheduleAi()
-  }
+  appendEffects(before, result.state, result.events)
+  markTurnCue(before, result.state)
+  maybePlayTurnCue()
+  scheduleAi()
 }
 function scheduleAi() {
   clearTimeout(aiTimer)
   aiTimer = undefined
-  if (view.value !== 'game' || !aiTurn.value || !game.value || game.value.winner !== null || presentation.value) return
-  aiTimer = setTimeout(() => {
+  if (view.value !== 'game' || !aiTurn.value || !game.value || game.value.winner !== null) return
+  aiTimer = setTimeout(async () => {
     aiTimer = undefined
-    if (view.value !== 'game' || !aiTurn.value || !game.value || game.value.winner !== null || presentation.value) return
-    const action = chooseGreedyAction(game.value, definitions)
-    if (action) perform(action)
+    if (view.value !== 'game' || !aiTurn.value || !game.value || game.value.winner !== null) return
+    const before = game.value
+    const client = ai ??= new AiClient()
+    const action = await client.choose(before)
+    if (ai === client && game.value === before && view.value === 'game' && aiTurn.value && action) perform(action)
   }, 450)
 }
 function selectHand(id: string) {
@@ -203,7 +233,16 @@ function selectAttacker(id: string) {
   selectedAttacker.value = previous === id ? null : id
 }
 function play() {
+  if (selectedEvent.value && canUseEvent.value && game.value) {
+    send({ type: 'USE_EVENT', player: game.value.currentPlayer, eventId: selectedEvent.value })
+    return
+  }
   if (canPlay.value && game.value && selectedHand.value) send({ type: 'PLAY_CARD', player: game.value.currentPlayer, cardId: selectedHand.value })
+}
+function selectEvent(id: string) {
+  if (!enabled.value || pendingTarget.value) return
+  clearSelection()
+  selectedEvent.value = id
 }
 function selectBoard(id: string, friendly: boolean) {
   if (!enabled.value) return
@@ -220,14 +259,14 @@ function attack(target: { type: 'player' } | { type: 'character'; instanceId: st
 <template>
   <main :class="{ 'match-view': view === 'game' }">
     <header class="page-header">
-      <div><span class="eyebrow">CULTURAL REVOLUTION: THE GAME · v{{ version }}</span><h1>文革杀 <span>{{ view === 'game' ? (mode === 'ai' ? '玩家 vs 贪心 AI' : '双人联机') : view === 'home' ? '横扫一切牛鬼蛇神' : view === 'rules' ? '游戏规则' : view === 'lobby' ? '双人联机' : '了解卡牌' }}</span></h1></div>
+      <div><span class="eyebrow">CULTURAL REVOLUTION: THE GAME · v{{ version }}</span><h1>文革杀 <span>{{ view === 'game' ? (mode === 'ai' ? '玩家 vs AI 2.0' : '双人联机') : view === 'home' ? '横扫一切牛鬼蛇神' : view === 'rules' ? '游戏规则' : view === 'lobby' ? '双人联机' : '了解卡牌' }}</span></h1></div>
       <div v-if="view !== 'home'" class="header-actions"><span v-if="view === 'game' && mode === 'online'" class="connection-status">{{ onlineStatus.phase === 'closed' ? '连接中断' : `${onlineStatus.isHost ? '房主' : '加入者'} · 已连接` }}</span><button v-if="view === 'game' && mode === 'ai'" @click="startGame">重新开始</button><button v-if="view === 'game' && mode === 'online' && onlineStatus.isHost && game?.winner !== null" :disabled="!onlineStatus.ready" @click="online?.rematch()">再来一局</button><button @click="exit">返回</button></div>
     </header>
     <section v-if="view === 'home'" class="welcome">
       <h2>一张桌面，两种对战。</h2><p>48 张人物牌随机分配，行动力从 2 开始。</p>
       <div class="mode-options">
         <button class="mode-button" @click="openOnline"><strong>双人联机</strong><span>创建房间，分享 ID，与朋友在线对战。</span><small>双方各用自己的浏览器，随机先后手。</small></button>
-        <button class="mode-button" @click="startGame"><strong>AI对战</strong><span>随机先后手，与贪心 AI 对战。</span><small>AI 单步评估出牌、换怪与打脸，择优行动。</small></button>
+        <button class="mode-button" @click="startGame"><strong>AI对战</strong><span>随机先后手，与AI 2.0 对战。</span><small>AI 2.0 规划整回合行动，并考虑对手反击。</small></button>
       </div>
       <div class="welcome-actions"><button @click="view = 'rules'">游戏规则</button><button @click="view = 'cards'">了解卡牌</button></div>
       <p class="muted">基础战斗、派别克制、关系加成与全部 SR / SSR 技能已就绪。</p>
@@ -236,28 +275,28 @@ function attack(target: { type: 'player' } | { type: 'character'; instanceId: st
     <GameRules v-else-if="view === 'rules'" />
     <OnlineLobby v-else-if="view === 'lobby'" :status="onlineStatus" :error="error" @host="connectOnline()" @join="connectOnline" />
     <template v-else-if="game && current && opponent">
-      <MatchResult v-if="game.winner !== null && !presentation" :winner="game.winner" :human-player="humanPlayer" />
+      <MatchResult v-if="game.winner !== null && effects.length === 0" :winner="game.winner" :human-player="humanPlayer" />
       <p class="orientation-hint">竖屏可左右滑动查看场牌和手牌；横屏能同时看到更多卡牌。</p>
       <p v-if="mode === 'online' && onlineStatus.phase === 'closed'" class="online-warning" role="alert">{{ onlineStatus.message }}</p>
       <div class="game-layout">
         <section class="table" aria-label="对战桌面">
           <div class="battle-row enemy-row">
-            <PlayerArea :player="opponent" :label="playerName(opponent.id)" :active="game.currentPlayer === opponent.id && game.winner === null" :damage="presentation?.playerDamage[opponent.id]" :targetable="attackReady && !guarded && !pendingTarget" @attack="attack({ type: 'player' })" />
+            <PlayerArea :player="opponent" :label="playerName(opponent.id)" :active="game.currentPlayer === opponent.id && game.winner === null" :damage-effects="playerEffects(opponent.id)" :targetable="attackReady && !guarded && !pendingTarget" @attack="attack({ type: 'player' })" />
             <div class="battle-cards">
               <Battlefield :board="opponent.board" :friendly="false" :selected-id="null" :enabled="enabled"
-                :presentation="presentation?.boards[opponent.id]"
+                :effects="boardEffects(opponent.id)"
                 :targeting="attackReady || (!!pendingTarget && selectedCard?.abilityId === 'WEAKEN')"
                 :selectable-ids="pendingTarget ? (selectedCard?.abilityId === 'WEAKEN' ? legalTargets : []) : undefined"
                 @select="id => selectBoard(id, false)" />
             </div>
           </div>
           <div class="battle-divider">
-            <div class="turn-bar"><b v-if="game.winner !== null">{{ playerName(game.winner) }} 获胜</b><b v-else-if="presentation">战斗结算中</b><b v-else>第 {{ game.turn }} 回合 · {{ playerName(game.currentPlayer) }}</b><small v-if="mode === 'ai'">本局{{ humanPlayer === 0 ? '你先手' : ' AI 先手' }}</small></div>
+            <div class="turn-bar"><b v-if="game.winner !== null">{{ playerName(game.winner) }} 获胜</b><b v-else>第 {{ Math.ceil(game.turn / 2) }} 轮 · {{ playerName(game.currentPlayer) }}的回合</b><small v-if="mode === 'ai'">本局{{ humanPlayer === 0 ? '你先手' : ' AI 先手' }}</small></div>
             <div class="table-status">
               <div class="hidden-hand" :class="{ revealed: !!handReveal }" :aria-label="`对方手牌 ${opponent.hand.length} 张`">
                 <div class="opponent-hand-cards" :role="handReveal ? 'status' : undefined">
                   <template v-if="handReveal">
-                    <span v-for="id in handReveal.cards" :key="id" class="revealed-card-name">{{ definitions[id]!.name }}</span>
+                    <span v-for="id in handReveal.cards" :key="id" class="revealed-card-name" :class="FACTION_CLASSES[definitions[id]!.faction]" :title="definitions[id]!.faction">{{ definitions[id]!.name }}</span>
                     <span v-if="handReveal.cards.length === 0" class="revealed-card-name">无手牌</span>
                   </template>
                   <template v-else><span v-for="n in Math.min(opponent.hand.length, 12)" :key="n" class="card-back">◆</span></template>
@@ -268,26 +307,28 @@ function attack(target: { type: 'player' } | { type: 'character'; instanceId: st
             </div>
           </div>
           <div class="battle-row friendly-row">
-            <PlayerArea :player="current" :label="playerName(current.id)" :active="game.currentPlayer === current.id && game.winner === null" :damage="presentation?.playerDamage[current.id]" />
+            <PlayerArea :player="current" :label="playerName(current.id)" :active="game.currentPlayer === current.id && game.winner === null" :damage-effects="playerEffects(current.id)" />
             <div class="battle-cards">
               <Battlefield :board="current.board" :friendly="true" :selected-id="selectedAttacker" :enabled="enabled"
-                :presentation="presentation?.boards[current.id]"
+                :effects="boardEffects(current.id)"
                 :targeting="!!pendingTarget && selectedCard?.abilityId === 'BUFF_ONE'"
                 :selectable-ids="pendingTarget ? (selectedCard?.abilityId === 'BUFF_ONE' ? legalTargets : []) : undefined"
                 @select="id => selectBoard(id, true)" />
             </div>
           </div>
+          <EventMarket :pool="game.eventPool" :turn="game.turn" :selected-id="selectedEvent" :enabled="enabled && !pendingTarget" @select="selectEvent" />
         </section>
         <section class="hand-zone" aria-label="手牌与回合操作">
           <Hand :cards="current.hand" :selected-id="selectedHand" :enabled="enabled && !pendingTarget" @select="selectHand" />
           <div class="turn-actions">
             <div class="play-controls">
-              <div class="play-info"><b v-if="selectedCard" :title="`${selectedCard.name} · 费用 ${selectedCard.cost}`">{{ selectedCard.name }} · 费用 {{ selectedCard.cost }}</b><b v-else :title="`${playerName(current.id)} 的手牌`">{{ playerName(current.id) }} 的手牌</b><span>行动力 {{ current.mana }} / {{ current.maxMana }}</span></div>
-              <button :disabled="!canPlay" @click="play">打出人物</button>
+              <div class="play-info"><b v-if="selectedEventCard" :title="`${selectedEventCard.name} · 费用 ${selectedEventCard.cost}`">{{ selectedEventCard.name }} · 费用 {{ selectedEventCard.cost }}</b><b v-else-if="selectedCard" :title="`${selectedCard.name} · 费用 ${selectedCard.cost}`">{{ selectedCard.name }} · 费用 {{ selectedCard.cost }}</b><b v-else :title="`${playerName(current.id)} 的手牌`">{{ playerName(current.id) }} 的手牌</b><span>行动力 {{ current.mana }} / {{ current.maxMana }}</span></div>
+              <button :disabled="selectedEventCard ? !canUseEvent : !canPlay" @click="play">{{ selectedEventCard ? '使用事件' : '打出人物' }}</button>
             </div>
-            <div v-if="pendingTarget || error || (selectedCard && !canPlay && !presentation)" class="action-feedback">
+            <div v-if="pendingTarget || error || (selectedCard && !canPlay) || selectedEventCard" class="action-feedback">
               <p v-if="pendingTarget" class="target-prompt" role="status">{{ turnHint }} 人物已登场并支付费用，请完成目标选择。</p>
-              <p v-else-if="selectedCard && !canPlay && !presentation" class="muted selection-hint">{{ current.board.length >= BOARD_LIMIT ? '场地已满（最多 5 人）' : `行动力不足：需要 ${selectedCard.cost}` }}</p>
+              <p v-else-if="selectedCard && !canPlay" class="muted selection-hint">{{ current.board.length >= BOARD_LIMIT ? '场地已满（最多 5 人）' : `行动力不足：需要 ${selectedCard.cost}` }}</p>
+              <p v-else-if="selectedEventCard" class="muted selection-hint">{{ game.eventPool.usedThisTurn ? '本回合已使用事件' : !canUseEvent ? '行动力不足' : selectedEventCard.description }}</p>
               <p v-if="error" class="error" role="alert">{{ error }}</p>
             </div>
             <button :disabled="!enabled || !!pendingTarget" class="primary-button end-turn-button" @click="send({ type: 'END_TURN', player: game.currentPlayer })">结束回合</button>

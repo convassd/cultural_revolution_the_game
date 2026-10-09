@@ -15,6 +15,8 @@ export interface BattlePresentation {
   boards: [Array<PresentedCharacter | null>, Array<PresentedCharacter | null>]
   playerDamage: [number | null, number | null]
 }
+export interface BattleEffect extends BattlePresentation { id: number }
+export interface BoardEffect { id: number; slots: Array<PresentedCharacter | null> }
 type Definitions = Readonly<Record<string, CharacterDefinition>>
 
 export function presentCharacter(character: CharacterInstance, board: readonly CharacterInstance[], definitions: Definitions): PresentedCharacter {

@@ -1,0 +1,14 @@
+[
+  { "type": "event", "id": "february_outline", "name": "二月提纲", "cost": 1, "scope": "全局", "description": "仅本回合全场造反派攻击 -1。", "image": "/events/placeholder.svg" },
+  { "type": "event", "id": "may_16_notice", "name": "五一六通知", "cost": 2, "scope": "全局", "description": "仅本回合全场造反派攻击 +1，保守派攻击 -1。", "image": "/events/placeholder.svg" },
+  { "type": "event", "id": "bombard_headquarters", "name": "炮打司令部", "cost": 3, "scope": "全局", "description": "场上的刘少奇、邓小平生命降至 1；其余保守派仅本回合攻击 -1。", "image": "/events/placeholder.svg" },
+  { "type": "event", "id": "january_storm", "name": "一月风暴", "cost": 3, "scope": "己方", "description": "己方造反派仅本回合攻击 +2；若己方场上有四人帮成员，再抽 1 张人物牌。", "image": "/events/placeholder.svg" },
+  { "type": "event", "id": "february_countercurrent", "name": "二月逆流", "cost": 3, "scope": "全局", "description": "仅本回合全场保守派、军队攻击 +1，造反派攻击 -1；陈毅、叶剑英、徐向前、谭震林、李富春、李先念再额外 +1。", "image": "/events/placeholder.svg" },
+  { "type": "event", "id": "july_20_incident", "name": "七二〇事件", "cost": 3, "scope": "全局", "description": "场上的王力、陈再道生命降至 1；仅本回合所有军队和造反派攻击 +1。", "image": "/events/placeholder.svg" },
+  { "type": "event", "id": "wen_gong_wu_wei", "name": "文攻武卫", "cost": 2, "scope": "己方", "description": "己方所有造反派先受到 1 点伤害，结算离场后，存活者仅本回合攻击 +2。", "image": "/events/placeholder.svg" },
+  { "type": "event", "id": "purge_may_16", "name": "清查五一六", "cost": 3, "scope": "全局", "description": "全场造反派受到 1 点伤害；大毒草成员额外受到 1 点（合为一次 2 点伤害）。", "image": "/events/placeholder.svg" },
+  { "type": "event", "id": "september_13_incident", "name": "九一三事件", "cost": 4, "scope": "全局", "description": "场上的林彪直接离场并触发折戟沉沙；其他林彪反党集团成员仅本回合攻击 -2。林彪不在场时仍结算减攻。", "image": "/events/placeholder.svg" },
+  { "type": "event", "id": "comprehensive_rectification", "name": "全面整顿", "cost": 3, "scope": "己方", "description": "己方所有受伤角色恢复 1 生命，不超过印刷生命；己方保守派仅本回合攻击 +1。", "image": "/events/placeholder.svg" },
+  { "type": "event", "id": "april_5_incident", "name": "四五天安门事件", "cost": 3, "scope": "全局", "description": "双刃：全场四人帮成员各受 1 点伤害，存活者仅本回合攻击 -1；同时场上的邓小平生命降至 1。", "image": "/events/placeholder.svg" },
+  { "type": "event", "id": "huairentang_incident", "name": "怀仁堂事变", "cost": 5, "scope": "全局", "description": "场上全部四人帮成员直接离场；其余造反派仅本回合攻击 -1。", "image": "/events/placeholder.svg" }
+]

@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import CharacterCard from './CharacterCard.vue'
+import EventCard from './EventCard.vue'
+import { eventCards } from '../data/events'
 import { computed, ref } from 'vue'
 import { characters } from '../data'
 import { queryCards } from '../data/catalog'
@@ -14,8 +16,9 @@ const visibleCards = computed(() => queryCards(characters, faction.value, sortKe
 </script>
 
 <template>
-  <section class="card-gallery" aria-label="全部人物卡牌">
-    <div class="gallery-heading"><h2>了解卡牌</h2><p>全部 {{ characters.length }} 张人物卡 · R / SR / SSR</p></div>
+  <section class="card-gallery" aria-label="全部卡牌">
+    <div class="gallery-heading"><h2>了解卡牌</h2><p>{{ characters.length }} 张人物卡 · {{ eventCards.length }} 张事件卡</p></div>
+    <h3>人物卡 · R / SR / SSR</h3>
     <p class="muted">SR / SSR 技能均已实现。排序使用卡牌原始属性，同组加成和复出变化只在对局中计算。</p>
     <div class="gallery-controls">
       <label>派别<select v-model="faction"><option value="all">全部派别</option><option v-for="item in FACTIONS" :key="item" :value="item">{{ item }}</option></select></label>
@@ -25,5 +28,8 @@ const visibleCards = computed(() => queryCards(characters, faction.value, sortKe
     </div>
     <div class="gallery-grid"><CharacterCard v-for="card in visibleCards" :key="card.id" :card="card" disabled /></div>
     <p v-if="visibleCards.length === 0" class="muted">没有符合条件的卡牌。</p>
+    <h3 class="event-gallery-heading">事件卡 · 公共卡池</h3>
+    <p class="muted">人物派别筛选仅作用于人物区。事件卡按费用及当前排序方向排列，描述均已实现。</p>
+    <div class="gallery-grid"><EventCard v-for="card in [...eventCards].sort((a, b) => direction === 'asc' ? a.cost - b.cost : b.cost - a.cost)" :key="card.id" :card="card" disabled /></div>
   </section>
 </template>

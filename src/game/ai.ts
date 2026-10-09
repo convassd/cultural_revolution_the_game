@@ -1,6 +1,7 @@
 import { applyAction } from './engine'
+import { eventDefinitions } from '../data/events'
 import type { Definitions, RandomSource } from './engine'
-import { BOARD_LIMIT, canAttackPlayer, effectiveAttack, playTargets } from './rules'
+import { BOARD_LIMIT, EVENT_UNLOCK_TURN, canAttackPlayer, effectiveAttack, LIN_INITIAL_COUNTDOWN, playTargets } from './rules'
 import type { GameAction, GameState, PlayerId, PlayerState } from './types'
 
 export function legalTurnActions(state: GameState, definitions: Definitions): GameAction[] {
@@ -10,6 +11,11 @@ export function legalTurnActions(state: GameState, definitions: Definitions): Ga
   const player = state.players[state.currentPlayer]
   const enemy = state.players[state.currentPlayer === 0 ? 1 : 0]
   const actions: GameAction[] = []
+  if (state.turn >= EVENT_UNLOCK_TURN && !state.eventPool.usedThisTurn) {
+    for (const eventId of state.eventPool.slots) {
+      if (eventId && eventDefinitions[eventId]!.cost <= player.mana) actions.push({ type: 'USE_EVENT', player: player.id, eventId })
+    }
+  }
   if (player.board.length < BOARD_LIMIT) {
     for (const cardId of player.hand) {
       const card = definitions[cardId]
@@ -49,7 +55,7 @@ function boardValue(player: PlayerState, enemy: PlayerState, definitions: Defini
     const card = definitions[character.definitionId]!
     let attack = effectiveAttack(character, player.board, definitions)
     if (card.abilityId === 'MAO_RANDOM_COMMAND') attack *= 0.5
-    if (card.abilityId === 'LIN_COUNTDOWN') attack *= (character.countdown ?? 2) <= 1 ? 0.45 : 0.8
+    if (card.abilityId === 'LIN_COUNTDOWN') attack *= (character.countdown ?? LIN_INITIAL_COUNTDOWN) <= 1 ? 0.45 : 0.8
     value += 1.5 + attack * 1.2 + Math.sqrt(character.health)
     if (card.abilityId === 'TOUGH') value += 1.2
     if (card.abilityId === 'ZHOU_MEDIATION') value += Math.min(3, player.board.length - 1)
@@ -63,7 +69,7 @@ function boardValue(player: PlayerState, enemy: PlayerState, definitions: Defini
   return value
 }
 
-function positionScore(state: GameState, perspective: PlayerId, definitions: Definitions, knownHand: ReadonlySet<string>): number {
+export function positionScore(state: GameState, perspective: PlayerId, definitions: Definitions, knownHand: ReadonlySet<string>): number {
   if (state.winner !== null) return state.winner === perspective ? 1_000_000 : -1_000_000
   const player = state.players[perspective]
   const enemy = state.players[perspective === 0 ? 1 : 0]

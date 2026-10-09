@@ -1,9 +1,14 @@
 import type { CharacterDefinition, CharacterInstance, Faction, PlayerState, RelationGroup } from './types'
 
 export const INITIAL_HP = 20
+export const INITIAL_HAND_SIZE = 5
+export const TARGET_HAND_SIZE = 5
 export const INITIAL_MANA = 2
 export const MAX_MANA = 10
 export const BOARD_LIMIT = 5
+export const LIN_INITIAL_COUNTDOWN = 3
+// Round 4, player 2: seven individual turns finish before the pool opens.
+export const EVENT_UNLOCK_TURN = 8
 export const FACTIONS: readonly Faction[] = ['保守派', '造反派', '军队', '无派别']
 export const GROUP_NAMES: Record<RelationGroup, string> = {
   gang_of_four: '四人帮', lin_group: '林彪反党集团', wang_guan_qi: '大毒草',
@@ -35,7 +40,7 @@ export function effectiveAttack(
 ): number {
   const definition = definitions[character.definitionId]!
   const borrowedPower = definition.abilityId === 'JIANG_BORROW_POWER' && board.some(c => c.definitionId === 'mao_zedong' && c.health > 0) ? 2 : 0
-  return Math.max(0, (character.attackOverride ?? definition.attack) + groupBonus(definition, board, definitions) + borrowedPower + character.temporaryAttack)
+  return Math.max(0, (character.attackOverride ?? definition.attack) + groupBonus(definition, board, definitions) + borrowedPower + character.temporaryAttack + (character.attackModifiers ?? []).reduce((sum, modifier) => sum + modifier.amount, 0))
 }
 
 export function effectiveFaction(

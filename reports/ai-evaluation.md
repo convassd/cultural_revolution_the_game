@@ -2,6 +2,10 @@
 
 This is a historical benchmark from before the five SSR ability revisions. Its win rates describe the earlier ruleset, not the current balance. The benchmark script can be rerun to evaluate the updated mechanics.
 
+See [Five-card refill comparison](draw-refill-evaluation.md) for a newer small-sample comparison using the revised SSR abilities and current hand-refill rule.
+
+The current in-game opponent is described in [AI 2.0 evaluation](ai-v2-evaluation.md), including its comparison against this retained greedy baseline under the current rules.
+
 The in-game random AI was replaced with a greedy heuristic. Evaluation used 20 HP, initially with the human always opening and the AI second. The UI now assigns first/second seats randomly; combat rules and scoring were not changed.
 
 Unconditional face attacks have clear counterexamples, but racing and first-seat advantage remain strong. These results do not establish that a second-seat AI usually beats a face-attack strategy.

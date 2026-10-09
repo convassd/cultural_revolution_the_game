@@ -1,7 +1,9 @@
 import { resolveCombat } from './combat'
-import { BOARD_LIMIT, canAttackPlayer, effectiveAttack, effectiveFaction, INITIAL_HP, INITIAL_MANA, MAX_MANA, playTargets } from './rules'
+import { BOARD_LIMIT, EVENT_UNLOCK_TURN, canAttackPlayer, effectiveAttack, effectiveFaction, INITIAL_HAND_SIZE, INITIAL_HP, INITIAL_MANA, MAX_MANA, playTargets, TARGET_HAND_SIZE } from './rules'
 import { applyDamageBatch, beginCharacterTurn, createCharacter, endCharacterTurn, recordLog as log, removeDead } from './effects'
 import { ABILITIES } from '../data/abilities'
+import { eventCards, eventDefinitions } from '../data/events'
+import { resolveEvent } from './eventEffects'
 import type { ActionResult, CharacterDefinition, GameAction, GameEvent, GameState, PlayerId, PlayerState } from './types'
 
 export type RandomSource = () => number
@@ -21,17 +23,29 @@ function draw(state: GameState, player: PlayerState) {
   if (cardId) {
     player.hand.push(cardId)
     log(state, `玩家 ${player.id + 1} 抽了 1 张牌。`)
+    return true
   } else {
     log(state, `玩家 ${player.id + 1} 牌库已空，跳过抽牌。`)
+    return false
   }
 }
 
 function startTurn(state: GameState, definitions: Definitions, random: RandomSource, events: GameEvent[] = []) {
+  // Expire longer effects before draws, returns and other turn-start triggers.
+  for (const owner of state.players) {
+    for (const character of owner.board) {
+      if (character.attackModifiers) character.attackModifiers = character.attackModifiers.filter(effect => effect.expiresAtTurn > state.turn)
+    }
+  }
   const player = state.players[state.currentPlayer]
   player.maxMana = player.maxMana === 0 ? INITIAL_MANA : Math.min(MAX_MANA, player.maxMana + 1)
   player.mana = player.maxMana
-  log(state, `第 ${state.turn} 回合：玩家 ${player.id + 1}，行动力 ${player.mana}。`)
-  draw(state, player)
+  state.eventPool.usedThisTurn = false
+  if (state.turn === EVENT_UNLOCK_TURN) state.eventPool.slots = [state.eventPool.deck.shift() ?? null, state.eventPool.deck.shift() ?? null]
+  log(state, `第 ${Math.ceil(state.turn / 2)} 轮：玩家 ${player.id + 1} 的回合，行动力 ${player.mana}。`)
+  while (player.hand.length < TARGET_HAND_SIZE) {
+    if (!draw(state, player)) break
+  }
   beginCharacterTurn(state, definitions, random, events)
 }
 
@@ -43,13 +57,14 @@ export function createGame(cards: readonly CharacterDefinition[], random: Random
   function player(id: PlayerId): PlayerState {
     const deck = ids.slice(id * 24, (id + 1) * 24)
     return { id, hp: INITIAL_HP, mana: 0, maxMana: 0,
-      hand: deck.splice(0, id === 0 ? 3 : 4), deck, board: [], discard: [], pendingReturns: [], mediationUsed: false }
+      hand: deck.splice(0, INITIAL_HAND_SIZE), deck, board: [], discard: [], pendingReturns: [], mediationUsed: false }
   }
   const state: GameState = {
+    eventPool: { deck: shuffle(eventCards.map(card => card.id), random), slots: [null, null], discard: [], usedThisTurn: false },
     players: [player(0), player(1)], currentPlayer: 0, turn: 1,
     winner: null, nextInstanceId: 1, revealedHand: null,
     pendingPlayTarget: null,
-    log: ['新游戏：双方各 24 张牌；先手起手 3 张，后手起手 4 张。'],
+    log: [`新游戏：双方各 24 张牌；双方起手 ${INITIAL_HAND_SIZE} 张，己方回合开始补至 ${TARGET_HAND_SIZE} 张。`],
   }
   // The opening turn follows the same draw rule as every later turn.
   startTurn(state, Object.fromEntries(cards.map(card => [card.id, card])), random)
@@ -60,8 +75,12 @@ function applyTargetedEntry(state: GameState, card: CharacterDefinition, targetI
   const owner = card.abilityId === 'BUFF_ONE' ? state.currentPlayer : state.currentPlayer === 0 ? 1 : 0
   const target = state.players[owner].board.find(c => c.instanceId === targetId)!
   const change = card.abilityId === 'BUFF_ONE' ? 1 : -1
-  target.temporaryAttack += change
-  log(state, `${card.name}：${definitions[target.definitionId]!.name} 本回合攻击 ${change > 0 ? '+1' : '-1'}。`)
+  if (card.abilityId === 'WEAKEN') {
+    target.attackModifiers ??= []
+    target.attackModifiers.push({ amount: change, expiresAtTurn: state.turn + 2 })
+  } else target.temporaryAttack += change
+  const duration = card.abilityId === 'WEAKEN' ? '直到施放者的下个回合开始' : '仅持续本回合'
+  log(state, `${card.name}「${ABILITIES[card.abilityId!].name}」：${definitions[target.definitionId]!.name} 攻击 ${change > 0 ? '+1' : '-1'}，${duration}。`)
 }
 
 export function applyAction(state: GameState, action: GameAction, definitions: Definitions, random: RandomSource = Math.random): ActionResult {
@@ -76,6 +95,20 @@ export function applyAction(state: GameState, action: GameAction, definitions: D
   const enemy = next.players[action.player === 0 ? 1 : 0]
 
   switch (action.type) {
+    case 'USE_EVENT': {
+      const slot = next.eventPool.slots.indexOf(action.eventId)
+      const card = eventDefinitions[action.eventId]
+      if (next.turn < EVENT_UNLOCK_TURN || slot < 0 || !card) return reject('该事件当前不可使用。')
+      if (next.eventPool.usedThisTurn) return reject('每个玩家每回合最多使用一张事件卡。')
+      if (player.mana < card.cost) return reject('行动力不足。')
+      player.mana -= card.cost
+      next.eventPool.usedThisTurn = true
+      log(next, `玩家 ${player.id + 1} 使用 ${card.name}（${card.cost} 行动力）：${card.description}`)
+      resolveEvent(next, card.id, definitions, events)
+      next.eventPool.discard.push(card.id)
+      next.eventPool.slots[slot] = next.eventPool.deck.shift() ?? null
+      break
+    }
     case 'PLAY_CARD': {
       const index = player.hand.indexOf(action.cardId)
       const card = definitions[action.cardId]
