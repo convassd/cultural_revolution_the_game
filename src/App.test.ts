@@ -7,11 +7,12 @@ import { ABILITIES } from './data/abilities'
 import * as engine from './game/engine'
 import * as ai from './game/ai'
 import { createCharacter } from './game/effects'
-import { EVENT_UNLOCK_TURN, GROUP_NAMES } from './game/rules'
+import { GROUP_NAMES } from './game/rules'
 import { BATTLE_EFFECT_DURATION } from './presentation/battle'
 import * as resultAudio from './presentation/resultSound'
 import type { SessionCallbacks } from './online/session'
 import { projectState } from './online/protocol'
+import { HAND_DRAG_TYPE } from './presentation/cardInteraction'
 import type { GameState, PlayerId, GameEvent } from './game/types'
 const onlineMocks = vi.hoisted(() => ({ sessions: [] as Array<{ callbacks: SessionCallbacks; submit: ReturnType<typeof vi.fn>; ready: ReturnType<typeof vi.fn>; destroy: ReturnType<typeof vi.fn>; rematch: ReturnType<typeof vi.fn> }> }))
 // UI fixtures control individual AI actions; the planner and real worker client have separate tests.
@@ -90,7 +91,20 @@ function mount() {
     ;(item.props.onClick as () => void)()
     await nextTick()
   }
-  return { root, app, button, click }
+  function field(friendly = true) {
+    return descendants(root).filter(item => String(item.props.class).split(' ').includes('battlefield'))[friendly ? 1 : 0]!
+  }
+  function slot(position = 1, friendly = true) {
+    return descendants(field(friendly)).find(item => item.props['data-slot'] === position)!
+  }
+  async function place(position = 1, friendly = true) {
+    ;(slot(position, friendly).props.onClickCapture as Function)({ stopPropagation() {} })
+    await nextTick()
+  }
+  const eventZone = () => descendants(root).find(item => item.props['aria-label'] === '事件区域')!
+  async function useEvent() { (eventZone().props.onClick as Function)(); await nextTick() }
+  const hand = () => descendants(root).find(item => item.props.class === 'hand')!
+  return { root, app, button, click, place, slot, field, eventZone, useEvent, hand }
 }
 beforeEach(() => {
   onlineMocks.sessions.length = 0
@@ -112,29 +126,6 @@ afterEach(() => {
 })
 
 describe('match mode UI and AI scheduling', () => {
-  it('selects and spends a public event through the narrow play controls, replaces its slot and caps usage', async () => {
-    const state = engine.createGame(characters, () => .5)
-    state.turn = 9
-    state.players[0].mana = state.players[0].maxMana = 10
-    state.eventPool = { slots: ['february_outline', 'may_16_notice'], deck: ['january_storm'], discard: [], usedThisTurn: false }
-    vi.spyOn(engine, 'createGame').mockReturnValue(state)
-    const apply = vi.spyOn(engine, 'applyAction')
-    const ui = mount()
-    await ui.click('AI对战')
-    const event = descendants(ui.root).find(item => item.tag === 'button' && String(item.props['aria-label']).startsWith('二月提纲'))!
-    ;(event.props.onClick as () => void)()
-    await nextTick()
-    expect(ui.button('使用事件').props.disabled).toBe(false)
-    await ui.click('使用事件')
-    expect(apply).toHaveBeenCalledWith(state, { type: 'USE_EVENT', player: 0, eventId: 'february_outline' }, definitions)
-    expect(text(ui.root)).toContain('本回合已使用')
-    expect(descendants(ui.root).some(item => String(item.props['aria-label']).startsWith('一月风暴'))).toBe(true)
-    expect(descendants(ui.root).some(item => String(item.props['aria-label']).startsWith('二月提纲'))).toBe(false)
-    const second = descendants(ui.root).find(item => item.tag === 'button' && String(item.props['aria-label']).startsWith('五一六通知'))!
-    ;(second.props.onClick as () => void)()
-    await nextTick()
-    expect(ui.button('使用事件').props.disabled).toBe(true)
-  })
   it.each([['ai', 0], ['ai', 1]] as const)(
     'reveals enemy names in the middle row until the next hand selection: %s seat=%s', async (mode, player) => {
       const state = engine.createGame(characters, () => 0.5)
@@ -147,7 +138,7 @@ describe('match mode UI and AI scheduling', () => {
       vi.mocked(Math.random).mockReturnValueOnce(player === 0 ? 0.999999 : 0)
       await ui.click('AI对战')
       await ui.click('4康生')
-      await ui.click('打出人物')
+      await ui.place()
       const names = () => descendants(ui.root).filter(item => String(item.props.class).split(' ').includes('revealed-card-name')).map(text)
       expect(names()).toEqual(['毛泽东', '林彪', '刘少奇', '姚文元'])
       const revealTags = descendants(ui.root).filter(item => String(item.props.class).split(' ').includes('revealed-card-name'))
@@ -171,7 +162,7 @@ describe('match mode UI and AI scheduling', () => {
     const ui = mount()
     await ui.click('AI对战')
     await ui.click('4康生')
-    await ui.click('打出人物')
+    await ui.place()
     expect(descendants(ui.root).filter(item => String(item.props.class).split(' ').includes('revealed-card-name')).map(text)).toEqual(['无手牌'])
     await ui.click('结束回合')
     expect(descendants(ui.root).some(item => String(item.props.class).split(' ').includes('revealed-card-name'))).toBe(false)
@@ -264,6 +255,7 @@ describe('match mode UI and AI scheduling', () => {
     expect(text(overlay)).toContain(label)
     expect(resultAudio.playResultSound).toHaveBeenCalledExactlyOnceWith(winner === human)
     await vi.advanceTimersByTimeAsync(5000)
+    expect(descendants(ui.root).find(item => String(item.props.class).includes('match-result'))).toBe(overlay)
     expect(resultAudio.playResultSound).toHaveBeenCalledOnce()
     expect(vi.getTimerCount()).toBe(0)
     await ui.click('重新开始')
@@ -287,7 +279,7 @@ describe('match mode UI and AI scheduling', () => {
       String(item.props['aria-label']).startsWith('江青，'))!
     ;(card.props.onClick as () => void)()
     await nextTick()
-    await ui.click('打出人物')
+    await ui.place()
     expect(resultAudio.playResultSound).not.toHaveBeenCalled()
     await vi.advanceTimersByTimeAsync(BATTLE_EFFECT_DURATION)
     expect(descendants(ui.root).find(item => item.props['aria-label'] === '江青，费用 4，攻击 7，生命 5')).toBeDefined()
@@ -299,43 +291,34 @@ describe('match mode UI and AI scheduling', () => {
   })
 
   it.each([
-    ['zhang_chunqiao', '张春桥', '吴晗'], ['yao_wenyuan', '姚文元', '林立果'],
-  ])('commits %s on play and then requires a target without cancel or undo controls', async (cardId, name, targetName) => {
-    const state = engine.createGame(characters, () => 0.5)
-    state.players[0].hand = [cardId!, 'wu_de']
-    state.players[0].mana = 10
+    ['zhang_chunqiao', '张春桥', 0, 1], ['yao_wenyuan', '姚文元', 1, -1], ['guan_feng', '关锋', 1, -1],
+  ] as const)('automatically resolves %s and immediately permits selling or ending the turn', async (cardId, name, owner, change) => {
+    const state = engine.createGame(characters, () => .5)
+    state.players[0].hand = [cardId, 'wu_de']; state.players[0].mana = 10
     state.players[0].board = [createCharacter(definitions.wu_han!, 'friendly')]
     state.players[1].board = [createCharacter(definitions.lin_liguo!, 'enemy')]
     vi.spyOn(engine, 'createGame').mockReturnValueOnce(state)
     const actions = vi.spyOn(engine, 'applyAction')
     const ui = mount()
-    async function clickCard(cardName: string) {
-      const card = descendants(ui.root).find(item => item.tag === 'button' &&
-        String(item.props['aria-label']).startsWith(`${cardName}，`))!
-      expect(card).toBeDefined()
-      expect(card.props.disabled).not.toBe(true)
-      ;(card.props.onClick as () => void)()
-      await nextTick()
-    }
     await ui.click('AI对战')
-    await clickCard(name!)
-    await ui.click('打出人物')
+    const card = descendants(ui.root).find(item => item.tag === 'button' && String(item.props['aria-label']).startsWith(name + '，'))!
+    ;(card.props.onClick as () => void)(); await nextTick()
+    await ui.place()
     const committed = actions.mock.results.at(-1)!.value.state
+    expect(actions.mock.lastCall?.[1]).toEqual({ type: 'PLAY_CARD', player: 0, cardId })
     expect(committed.players[0].hand).toEqual(['wu_de'])
-    expect(committed.players[0].mana).toBe(10 - definitions[cardId!]!.cost)
-    expect(committed.players[0].board.at(-1).definitionId).toBe(cardId)
-    expect(text(ui.root)).toContain('人物已登场并支付费用')
-    expect(text(ui.root)).not.toContain('取消选目标')
-    expect(text(ui.root)).not.toContain('撤回')
-    expect(ui.button('结束回合').props.disabled).toBe(true)
-    const remainingHand = descendants(ui.root).find(item => item.tag === 'button' &&
-      String(item.props['aria-label']).startsWith('吴德，'))!
-    expect(remainingHand.props.disabled).toBe(true)
-    await clickCard(targetName!)
-    expect(actions.mock.lastCall?.[1].type).toBe('SELECT_PLAY_TARGET')
-    expect(actions.mock.results.at(-1)!.value.state.pendingPlayTarget).toBeNull()
+    expect(committed.players[0].mana).toBe(10 - definitions[cardId]!.cost)
+    expect('pendingPlayTarget' in committed).toBe(false)
+    const target = committed.players[owner].board[0]!
+    expect(owner === 0 ? target.temporaryAttack : target.attackModifiers[0].amount).toBe(change)
+    expect(text(ui.root)).not.toContain('请完成目标选择')
     expect(ui.button('结束回合').props.disabled).toBe(false)
-    expect(text(ui.root)).not.toContain('人物已登场并支付费用')
+    await ui.click('3吴德')
+    expect(ui.button('卖牌').props.disabled).toBe(false)
+    await ui.click('卖牌')
+    expect(actions.mock.lastCall?.[1].type).toBe('SELL_CARD')
+    await ui.click('结束回合')
+    expect(actions.mock.lastCall?.[1].type).toBe('END_TURN')
   })
 
   it('offers equal mode buttons with their own descriptions and a separate gallery button', () => {
@@ -386,12 +369,12 @@ describe('match mode UI and AI scheduling', () => {
     session.callbacks.onStatus(status)
     session.callbacks.onFrame(frame(state, 0))
     await nextTick()
-    expect(text(ui.root)).toContain('你（玩家 2） 的手牌')
+    expect(ui.hand().props['aria-label']).toBe('你（玩家 2） 的手牌')
     expect(text(ui.root)).not.toContain('毛泽东')
     expect(text(ui.root)).not.toContain('请将操作交给')
     const apply = vi.spyOn(engine, 'applyAction')
     await ui.click('4康生')
-    await ui.click('打出人物')
+    await ui.place()
     expect(session.submit).toHaveBeenCalledWith({ type: 'PLAY_CARD', player: 1, cardId: 'kang_sheng' })
     expect(apply).not.toHaveBeenCalled()
     session.callbacks.onStatus({ ...status, ready: false })
@@ -456,7 +439,7 @@ describe('match mode UI and AI scheduling', () => {
     await ui.click('AI对战')
     await ui.click('结束回合')
     expect(text(ui.root)).toContain('AI 2.0 正在行动')
-    expect(text(ui.root)).toContain('你（玩家 1） 的手牌')
+    expect(ui.hand().props['aria-label']).toBe('你（玩家 1） 的手牌')
     expect(text(ui.root)).not.toContain('请将操作交给')
     expect(ui.button('结束回合').props.disabled).toBe(true)
     // Even a directly dispatched disabled event cannot advance the opponent's turn.
@@ -475,10 +458,10 @@ describe('match mode UI and AI scheduling', () => {
     vi.mocked(Math.random).mockReturnValueOnce(0)
     await ui.click('AI对战')
     expect(text(ui.root)).toContain('本局 AI 先手')
-    expect(text(ui.root)).toContain('你（玩家 2） 的手牌')
+    expect(ui.hand().props['aria-label']).toBe('你（玩家 2） 的手牌')
     expect(text(ui.root)).not.toContain('AI 2.0（玩家 1） 的手牌')
     const handCards = () => descendants(ui.root).filter(item => item.tag === 'button' &&
-      String(item.props.class).includes('character-card') && item.parent?.props.class === 'hand')
+      item.parent?.props.class === 'hand')
     // Both seats start with five cards; a full hand skips the first-turn refill.
     expect(handCards()).toHaveLength(5)
     expect(ui.button('结束回合').props.disabled).toBe(true)
@@ -522,7 +505,7 @@ describe('match mode UI and AI scheduling', () => {
     await ui.click('AI对战')
     await vi.advanceTimersByTimeAsync(450)
     expect(text(ui.root)).toContain('AI 2.0（玩家 1） 获胜')
-    expect(text(ui.root)).toContain('你（玩家 2） 的手牌')
+    expect(ui.hand().props['aria-label']).toBe('你（玩家 2） 的手牌')
     await vi.advanceTimersByTimeAsync(BATTLE_EFFECT_DURATION)
     expect(ui.button('结束回合').props.disabled).toBe(true)
     expect(vi.getTimerCount()).toBe(0)
@@ -638,7 +621,7 @@ describe('match mode UI and AI scheduling', () => {
     await ui.click('2吴晗')
     expect(text(ui.root)).toContain('已死亡')
     await ui.click('3聂元梓')
-    await ui.click('打出人物')
+    await ui.place()
     const card = descendants(ui.root).find(item => item.tag === 'button' && String(item.props['aria-label']).startsWith('聂元梓，') && item.parent?.props.class === 'board-card')!
     expect(card.props.disabled).toBe(false)
     expect(text(ui.root)).toContain('已死亡')
@@ -707,32 +690,6 @@ describe('match mode UI and AI scheduling', () => {
   })
 })
 
-describe('delayed event market', () => {
-  it('shows the unlock hint through round 4 player 1, then opens for player 2', async () => {
-    const state = engine.createGame(characters, () => .5)
-    state.turn = EVENT_UNLOCK_TURN - 2
-    state.currentPlayer = 1
-    state.eventPool.deck = ['february_outline', 'may_16_notice', 'january_storm']
-    vi.spyOn(engine, 'createGame').mockReturnValueOnce(state)
-    vi.mocked(Math.random).mockReturnValueOnce(0)
-    const ui = mount()
-    await ui.click('AI对战')
-    const marketCards = () => descendants(ui.root).filter(item => item.tag === 'button' && String(item.props.class).split(' ').includes('event-card'))
-    expect(marketCards()).toHaveLength(0)
-    expect(text(ui.root)).toContain('第 4 轮玩家 2 回合开放')
-    await ui.click('结束回合')
-    expect(marketCards()).toHaveLength(0)
-    expect(text(ui.root)).toContain('第 4 轮 · AI 2.0（玩家 1）的回合')
-    await vi.advanceTimersByTimeAsync(450)
-    expect(text(ui.root)).toContain('第 4 轮 · 你（玩家 2）的回合')
-    expect(marketCards()).toHaveLength(2)
-    expect(text(ui.root)).not.toContain('第 4 轮玩家 2 回合开放')
-    ;(marketCards()[0]!.props.onClick as () => void)()
-    await nextTick()
-    expect(ui.button('使用事件').props.disabled).toBe(false)
-  })
-})
-
 describe('delayed visual compaction with immediate controls', () => {
   it('holds the right-hand survivor in place while it attacks, then moves it after death feedback finishes', async () => {
     const state = engine.createGame(characters, () => .5)
@@ -793,5 +750,222 @@ describe('delayed visual compaction with immediate controls', () => {
     await vi.advanceTimersByTimeAsync(100)
     expect(ghosts()).toHaveLength(0)
     expect(text(slots()[0]!)).toContain('吴晗')
+  })
+})
+
+describe('mixed hands, selling and the shared active event', () => {
+  it('sells a character for energy and replaces events from the hand with live controls', async () => {
+    const state = engine.createGame(characters, () => .5)
+    state.players[0].hand = ['mao_zedong', 'may_16_notice', 'february_outline']
+    state.players[0].mana = 1
+    vi.spyOn(engine, 'createGame').mockReturnValueOnce(state)
+    const apply = vi.spyOn(engine, 'applyAction')
+    const ui = mount()
+    await ui.click('AI对战')
+    const select = async (name: string) => {
+      const card = descendants(ui.root).find(item => item.tag === 'button' && String(item.props['aria-label']).startsWith(name + '，') && item.parent?.props.class === 'hand')!
+      expect(card).toBeDefined()
+      ;(card.props.onClick as () => void)(); await nextTick()
+    }
+    await select('五一六通知')
+    expect(String(ui.eventZone().props.class)).not.toContain('drop-ready')
+    expect(ui.button('卖牌').props.disabled).toBe(false)
+    await select('毛泽东')
+    await ui.click('卖牌')
+    expect(apply).toHaveBeenLastCalledWith(expect.anything(), { type: 'SELL_CARD', player: 0, cardId: 'mao_zedong' }, definitions)
+    expect(text(ui.root)).toContain('行动力 8')
+    expect(text(ui.root)).not.toContain('当前 25 HP')
+    await select('五一六通知'); await ui.useEvent()
+    const active = () => descendants(ui.root).find(item => item.props['aria-label'] === '当前事件')!
+    expect(text(active())).toContain('五一六通知')
+    expect(text(active())).not.toContain('全局')
+    await select('二月提纲'); await ui.useEvent()
+    expect(text(active())).toContain('二月提纲')
+    expect(text(active())).not.toContain('五一六通知')
+    expect(ui.button('结束回合').props.disabled).toBe(false)
+    expect(descendants(ui.root).some(item => item.props['aria-label'] === '公共事件卡池')).toBe(false)
+  })
+  it('reveals event cards using an event-colored name tag without treating them as characters', async () => {
+    const state = engine.createGame(characters, () => .5)
+    state.players[0].hand = ['kang_sheng']; state.players[0].mana = 4
+    state.players[1].hand = ['may_16_notice']
+    vi.spyOn(engine, 'createGame').mockReturnValueOnce(state)
+    const ui = mount()
+    await ui.click('AI对战'); await ui.click('4康生'); await ui.place()
+    const tag = descendants(ui.root).find(item => item.props.class === 'revealed-card-name faction-event')!
+    expect(text(tag)).toBe('五一六通知')
+    expect(tag.props.title).toBe('事件')
+  })
+})
+
+describe('click and drag hand destinations', () => {
+  function dragEvent() {
+    const data = new Map<string, string>()
+    return { preventDefault: vi.fn(), dataTransfer: { effectAllowed: '',
+      setData: (type: string, value: string) => data.set(type, value), getData: (type: string) => data.get(type) ?? '' } }
+  }
+  async function startDrag(ui: ReturnType<typeof mount>, id: string) {
+    const card = descendants(ui.hand()).find(item => item.props['data-card-id'] === id)!
+    const event = dragEvent()
+    ;(card.props.onDragstart as Function)(event)
+    await nextTick()
+    return { event, card }
+  }
+  async function drop(node: Node, event: ReturnType<typeof dragEvent>) {
+    ;(node.props.onDrop as Function)(event)
+    await nextTick()
+  }
+  it.each([0, 1] as const)('exposes ten distinct locations and deploys left-aligned after clicking own slot 5: seat %i', async seat => {
+    const state = engine.createGame(characters, () => .5)
+    state.currentPlayer = seat
+    state.players[seat].hand = ['wu_han']; state.players[seat].mana = 4
+    vi.spyOn(engine, 'createGame').mockReturnValueOnce(state)
+    const apply = vi.spyOn(engine, 'applyAction')
+    const ui = mount()
+    vi.mocked(Math.random).mockReturnValueOnce(seat === 0 ? .9 : .1)
+    await ui.click('AI对战')
+    for (const friendly of [false, true]) {
+      const slots = descendants(ui.field(friendly)).filter(item => item.props['data-slot'])
+      expect(slots.map(item => item.props['data-slot'])).toEqual([1,2,3,4,5])
+      expect(new Set(slots.map(item => item.props['data-player-id']))).toEqual(new Set([friendly ? seat : 1-seat]))
+    }
+    const controls = descendants(ui.root).find(item => item.props.class === 'turn-actions')!
+    expect(descendants(controls).filter(item => item.tag === 'button').map(text)).toEqual(['结束回合'])
+    expect(text(controls)).toContain('行动力')
+    expect(text(controls)).not.toContain('吴晗')
+    await ui.click('2吴晗'); await ui.place(5)
+    expect(apply).toHaveBeenCalledTimes(1)
+    expect(apply.mock.lastCall?.[1]).toEqual({ type:'PLAY_CARD',player:seat,cardId:'wu_han' })
+    expect(text(ui.slot(1))).toContain('吴晗')
+    expect(text(ui.slot(5))).not.toContain('吴晗')
+  })
+  it('drags without a prior click, rejects wrong destinations, then deploys once', async () => {
+    const state = engine.createGame(characters, () => .5)
+    state.players[0].hand = ['wu_han']; state.players[0].mana = 4
+    vi.spyOn(engine, 'createGame').mockReturnValueOnce(state)
+    const apply = vi.spyOn(engine, 'applyAction')
+    const ui = mount(); await ui.click('AI对战')
+    let drag = await startDrag(ui, 'wu_han')
+    expect(drag.event.dataTransfer.getData(HAND_DRAG_TYPE)).toBe('wu_han')
+    await drop(ui.slot(3,false),drag.event)
+    expect(apply).not.toHaveBeenCalled()
+    expect(text(ui.root)).toContain('人物只能打到己方场地')
+    drag = await startDrag(ui,'wu_han'); await drop(ui.eventZone(),drag.event)
+    expect(apply).not.toHaveBeenCalled()
+    drag = await startDrag(ui,'wu_han'); await drop(ui.slot(4),drag.event)
+    expect(apply).toHaveBeenCalledTimes(1)
+    expect(text(ui.slot(1))).toContain('吴晗')
+    await drop(ui.slot(4),drag.event)
+    expect(apply).toHaveBeenCalledTimes(1)
+  })
+  it('replaces an occupied event by drop and sells a character by drop without triggering its entry skill', async () => {
+    const state = engine.createGame(characters, () => .5)
+    state.players[0].hand = ['may_16_notice','mao_zedong']; state.players[0].mana = 4
+    state.activeEvent = {id:'february_outline',owner:1}
+    vi.spyOn(engine, 'createGame').mockReturnValueOnce(state)
+    const apply = vi.spyOn(engine, 'applyAction')
+    const ui = mount(); await ui.click('AI对战')
+    let drag = await startDrag(ui,'may_16_notice')
+    await drop(ui.slot(5),drag.event)
+    expect(apply).not.toHaveBeenCalled()
+    drag = await startDrag(ui,'may_16_notice'); await drop(ui.eventZone(),drag.event)
+    expect(text(ui.eventZone())).toContain('五一六通知')
+    expect(apply.mock.results.at(-1)!.value.state.players[1].discard).toContain('february_outline')
+    drag = await startDrag(ui,'mao_zedong'); await drop(ui.button('卖牌'),drag.event)
+    const committed = apply.mock.results.at(-1)!.value.state
+    expect(committed.players[0]).toMatchObject({hp:20,mana:9,hand:[],removed:['mao_zedong']})
+    expect(apply.mock.lastCall?.[1]).toEqual({type:'SELL_CARD',player:0,cardId:'mao_zedong'})
+  })
+  it('ignores external/cancelled drags and blocks stale drops after ending the turn', async () => {
+    const state = engine.createGame(characters, () => .5)
+    state.players[0].hand = ['wu_han']; state.players[0].mana = 4
+    vi.spyOn(engine, 'createGame').mockReturnValueOnce(state)
+    const apply = vi.spyOn(engine, 'applyAction')
+    const ui = mount(); await ui.click('AI对战'); await ui.click('2吴晗')
+    const external = dragEvent(); external.dataTransfer.setData(HAND_DRAG_TYPE,'wu_han')
+    await drop(ui.slot(2),external)
+    expect(apply).not.toHaveBeenCalled()
+    const drag = await startDrag(ui,'wu_han')
+    ;(drag.card.props.onDragend as Function)(); await nextTick()
+    await drop(ui.button('卖牌'),drag.event)
+    expect(apply).not.toHaveBeenCalled()
+    const next = await startDrag(ui,'wu_han')
+    await ui.click('结束回合')
+    await drop(ui.slot(2),next.event)
+    expect(apply).toHaveBeenCalledTimes(1)
+    expect(apply.mock.lastCall?.[1].type).toBe('END_TURN')
+  })
+  it('keeps an unaffordable/full-board card selected for selling, while events can still use a full battlefield', async () => {
+    const state = engine.createGame(characters, () => .5)
+    state.players[0].hand = ['mao_zedong','may_16_notice']; state.players[0].mana = 1
+    state.players[0].board = Array.from({length:5},(_,i)=>createCharacter(definitions.wu_han!,String(i)))
+    vi.spyOn(engine, 'createGame').mockReturnValueOnce(state)
+    const apply = vi.spyOn(engine, 'applyAction')
+    const ui = mount(); await ui.click('AI对战'); await ui.click('7毛泽东'); await ui.place()
+    expect(apply).not.toHaveBeenCalled()
+    expect(text(ui.root)).toContain('行动力不足')
+    expect(ui.button('卖牌').props.disabled).toBe(false)
+    await ui.click('卖牌')
+    expect(text(ui.root)).toContain('行动力 8')
+    const event = descendants(ui.hand()).find(item=>item.props['data-card-id']==='may_16_notice')!
+    ;(event.props.onClick as Function)(); await nextTick(); await ui.useEvent()
+    expect(apply.mock.lastCall?.[1]).toEqual({type:'PLAY_CARD',player:0,cardId:'may_16_notice'})
+  })
+  it('supports cancelling a selection and keyboard deployment without a mouse-only action', async () => {
+    const state = engine.createGame(characters, () => .5)
+    state.players[0].hand = ['wu_han']; state.players[0].mana = 4
+    vi.spyOn(engine,'createGame').mockReturnValueOnce(state)
+    const apply = vi.spyOn(engine,'applyAction')
+    const ui = mount(); await ui.click('AI对战')
+    await ui.click('2吴晗'); await ui.click('2吴晗')
+    expect(ui.button('卖牌').props.disabled).toBe(true)
+    await ui.click('2吴晗')
+    const layout = descendants(ui.root).find(item=>String(item.props.class).split(' ').includes('game-layout'))!
+    ;(layout.props.onKeydown as Function)({key:'Escape'}); await nextTick()
+    expect(ui.button('卖牌').props.disabled).toBe(true)
+    await ui.click('2吴晗')
+    const target = ui.slot(4), preventDefault = vi.fn()
+    ;(target.props.onKeydown as Function)({key:'Enter',target,currentTarget:target,preventDefault})
+    await nextTick()
+    expect(preventDefault).toHaveBeenCalledOnce()
+    expect(apply.mock.lastCall?.[1]).toEqual({type:'PLAY_CARD',player:0,cardId:'wu_han'})
+    expect(text(ui.slot(1))).toContain('吴晗')
+  })
+  it('forwards a second-seat drag to the online authority without locally executing it', async () => {
+    const ui = mount(); await ui.click('双人联机'); await ui.click('创建房间')
+    const session = onlineMocks.sessions[0]!
+    const state = engine.createGame(characters, () => .5)
+    state.currentPlayer = 1; state.players[1].mana = 4; state.players[1].hand = ['wu_han']
+    const status = {phase:'playing' as const,id:'host-id',isHost:true,seat:1 as PlayerId,ready:true,message:'已连接'}
+    session.callbacks.onStatus(status)
+    session.callbacks.onFrame({matchId:'drag-match',revision:0,seat:1,state:projectState(state,1),events:[],reveal:false})
+    await nextTick()
+    const apply = vi.spyOn(engine,'applyAction')
+    await ui.click('2吴晗')
+    const drag = await startDrag(ui,'wu_han') // Dragging an already-selected card must keep it selected.
+    await drop(ui.slot(5),drag.event)
+    expect(session.submit).toHaveBeenCalledExactlyOnceWith({type:'PLAY_CARD',player:1,cardId:'wu_han'})
+    expect(apply).not.toHaveBeenCalled()
+    expect(text(ui.slot(1))).not.toContain('吴晗')
+    session.callbacks.onStatus({...status,ready:false}); await nextTick()
+    await drop(ui.button('卖牌'),drag.event)
+    expect(session.submit).toHaveBeenCalledTimes(1)
+  })
+  it('can deploy immediately when all five positions are reserved by shattering cards', async () => {
+    const state = engine.createGame(characters, () => .5)
+    state.players[0].mana = 10
+    state.players[0].hand = ['september_13_incident','wu_han']
+    state.players[0].board = Array.from({length:5},(_,i)=>({...createCharacter(definitions.wu_han!,String(i)),health:1}))
+    state.players[1].board = [createCharacter(definitions.lin_biao!,'lin')]
+    vi.spyOn(engine,'createGame').mockReturnValueOnce(state)
+    const ui = mount(); await ui.click('AI对战')
+    const event = descendants(ui.hand()).find(item=>item.props['data-card-id']==='september_13_incident')!
+    ;(event.props.onClick as Function)(); await nextTick(); await ui.useEvent()
+    expect([1,2,3,4,5].every(slot=>String(ui.slot(slot).props.class).includes('reserved-slot'))).toBe(true)
+    const character = descendants(ui.hand()).find(item=>item.props['data-card-id']==='wu_han')!
+    ;(character.props.onClick as Function)(); await nextTick(); await ui.place(3)
+    expect(text(ui.field())).toContain('休息中')
+    expect(text(ui.field())).toContain('已死亡')
+    expect(ui.button('结束回合').props.disabled).toBe(false)
   })
 })

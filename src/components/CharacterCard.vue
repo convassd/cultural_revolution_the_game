@@ -28,7 +28,7 @@ const portrait = computed(() => `${import.meta.env.BASE_URL}${props.card.image.r
     @click="$emit('select')">
     <div class="card-heading"><span class="cost" title="费用">{{ card.cost }}</span><strong>{{ card.name }}</strong><span class="rarity">{{ card.rarity }}</span></div>
     <div class="portrait">
-      <img :src="portrait" :alt="`${card.name}的卡牌插画`" /><span class="faction">{{ currentFaction }}</span>
+      <img :src="portrait" :alt="`${card.name}的卡牌插画`" draggable="false" /><span class="faction">{{ currentFaction }}</span>
       <div v-if="details?.length" class="card-state-tags"><span v-for="detail in details" :key="detail">{{ detail }}</span></div>
     </div>
     <div class="skill-text" :title="[ability ? `${ability.name}：${ability.description}` : '无技能', card.relationGroup ? `关系组：${GROUP_NAMES[card.relationGroup]}` : null].filter(Boolean).join('\n')">

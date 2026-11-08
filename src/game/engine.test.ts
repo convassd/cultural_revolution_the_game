@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { ABILITIES } from '../data/abilities'
-import { characters, definitions } from '../data'
+import { characters, definitions, cardDefinitions } from '../data'
 import { applyAction, createGame, shuffle } from './engine'
 import { resolveCombat } from './combat'
-import { canAttackPlayer, effectiveAttack, factionBonus, groupBonus, playTargets } from './rules'
+import { canAttackPlayer, effectiveAttack, factionBonus, groupBonus } from './rules'
 import type { CharacterInstance, Faction, GameAction, GameState } from './types'
 
 function instance(id: string, instanceId = id, canAttack = true): CharacterInstance {
@@ -45,32 +45,57 @@ describe('data and setup', () => {
     const state = fixture()
     expect(state.players.map(p => p.hp)).toEqual([20, 20])
     expect(state.players.map(p => p.hand.length)).toEqual([5, 5])
-    expect(state.players.map(p => p.deck.length)).toEqual([19, 19])
+    expect(state.players.map(p => p.deck.length)).toEqual([25, 25])
     const all = state.players.flatMap(p => [...p.hand, ...p.deck])
-    expect(new Set(all).size).toBe(48)
-    expect(state.players[0].mana).toBe(2)
+    expect(new Set(all).size).toBe(60)
+    expect(state.players[0].mana).toBe(state.rules.energyPerTurn)
     expect(state.players[1].mana).toBe(0)
   })
   it('rejects missing or duplicate definitions at setup', () => {
     expect(() => createGame(characters.slice(1))).toThrow()
     expect(() => createGame([...characters.slice(1), characters[1]!])).toThrow()
   })
+  it.each([1,2,3,41,999])('separately shuffles equal card types and interleaves 4 characters then 1 event: seed %i', seed => {
+    let value = seed
+    const random = () => ((value = (Math.imul(value,1664525)+1013904223) >>> 0) / 4294967296)
+    const state = createGame(characters,random)
+    const all: string[] = []
+    for (const player of state.players) {
+      const deck = [...player.hand,...player.deck]
+      expect(deck.filter(id=>cardDefinitions[id]!.type==='character')).toHaveLength(24)
+      expect(deck.filter(id=>cardDefinitions[id]!.type==='event')).toHaveLength(6)
+      expect(deck.map(id=>cardDefinitions[id]!.type)).toEqual(Array.from({length:6},()=>['character','character','character','character','event']).flat())
+      all.push(...deck)
+    }
+    expect(new Set(all).size).toBe(60)
+  })
 })
 
 describe('turns and playing', () => {
-  it('increments mana on each personal turn, refills, draws and caps at 10', () => {
-    let state = fixture()
+  it('grants only seat 2 an opening energy bonus once, retaining the same hand and base E', () => {
+    let state = createGame(characters, () => .5, { energyPerTurn: 5, drawPerTurn: 2, secondPlayerOpeningBonus: 2 })
+    expect(state.players[0].mana).toBe(5)
+    const opening = [...state.players[1].hand]
     state = act(state, { type: 'END_TURN', player: 0 })
-    expect(state.currentPlayer).toBe(1)
-    expect(state.players[1].mana).toBe(2)
-    expect(state.players[1].hand).toHaveLength(5)
+    expect(state.players[1]).toMatchObject({ mana: 7, maxMana: 5, hand: opening })
+    state.players[1].mana = 25
     state = act(state, { type: 'END_TURN', player: 1 })
-    expect(state.players[0].maxMana).toBe(3)
-    state.players[0].maxMana = 10
-    state.players[0].mana = 0
+    expect(state.players[0].mana).toBe(5)
     state = act(state, { type: 'END_TURN', player: 0 })
+    expect(state.players[1]).toMatchObject({ mana: 5, maxMana: 5 })
+    expect(state.players[1].hand).toHaveLength(7)
+  })
+  it.each([-1, .5, Infinity, NaN])('rejects invalid opening bonus %s', secondPlayerOpeningBonus => {
+    expect(() => createGame(characters, () => .5, { energyPerTurn: 5, drawPerTurn: 2, secondPlayerOpeningBonus })).toThrow()
+  })
+  it('resets energy to E on every own turn without growth or carryover', () => {
+    let state = createGame(characters, () => .5, { energyPerTurn: 3, drawPerTurn: 2 })
+    state.players[0].mana = 17
+    state = act(state, { type: 'END_TURN', player: 0 })
+    expect(state.players[1].mana).toBe(3)
     state = act(state, { type: 'END_TURN', player: 1 })
-    expect(state.players[0].mana).toBe(10)
+    expect(state.players[0]).toMatchObject({ mana: 3, maxMana: 3 })
+    expect(state.players[0].hand).toHaveLength(7)
   })
   it('pays cost, moves a card, preserves the input snapshot and applies summoning sickness', () => {
     const state = fixture()
@@ -115,69 +140,44 @@ describe('turns and playing', () => {
     expect(state.players[0].board[0]!.health).toBe(3)
     expect(applyAction(state, attack, definitions).error).not.toBeNull()
   })
-  it('empty decks skip draws without fatigue', () => {
-    const state = fixture()
-    state.players[1].deck = []
-    state.players[1].hand = ['wu_han']
-    const next = act(state, { type: 'END_TURN', player: 0 })
-    expect(next.players[1].hp).toBe(20)
-    expect(next.players[1].hand).toEqual(['wu_han'])
-    expect(next.log.at(-1)).toContain('牌库已空')
-  })
-  it.each([0, 2, 4])('refills an incoming hand of %i cards to five in deck order, without mutating either player in the input', count => {
-    const state = fixture()
-    state.players[1].hand = state.players[1].hand.slice(0, count)
-    state.players[1].mana = 0
-    state.players[1].maxMana = 4
-    const before = structuredClone(state)
-    const next = act(state, { type: 'END_TURN', player: 0 })
-    expect(next.players[1].hand).toEqual([...before.players[1].hand, ...before.players[1].deck.slice(0, 5 - count)])
-    expect(next.players[1].deck).toEqual(before.players[1].deck.slice(5 - count))
-    expect(next.players[1]).toMatchObject({ mana: 5, maxMana: 5 })
-    expect(next.players[0].hand).toEqual(before.players[0].hand)
-    expect(state).toEqual(before)
-  })
-  it.each([5, 6, 8])('keeps an incoming hand of %i cards without drawing or discarding', count => {
-    const state = fixture()
-    state.players[1].hand.push(...state.players[1].deck.splice(0, count - 5))
-    const before = structuredClone(state.players[1])
-    const next = act(state, { type: 'END_TURN', player: 0 })
-    expect(next.players[1].hand).toEqual(before.hand)
-    expect(next.players[1].deck).toEqual(before.deck)
-    expect(next.players[1].discard).toEqual(before.discard)
-  })
-  it('draws only the available cards when a refill exhausts the deck', () => {
-    const state = fixture()
-    state.players[1].hand = []
-    state.players[1].deck = ['wu_han', 'lin_liguo']
-    const next = act(state, { type: 'END_TURN', player: 0 })
-    expect(next.players[1].hand).toEqual(['wu_han', 'lin_liguo'])
-    expect(next.players[1].deck).toEqual([])
-    expect(next.players[1].hp).toBe(20)
-    expect(next.log.filter(line => line.includes('牌库已空'))).toHaveLength(1)
-  })
-  it('refills after mana recovery but before Deng returns and Mao rolls', () => {
-    const state = fixture()
+  it.each([0, 2, 5, 8])('draws exactly K into a retained hand of %i cards', count => {
+    let state = fixture()
+    state.rules.drawPerTurn = 2
+    state.turn = 2
     state.currentPlayer = 1
-    state.players[0].hand = ['zhou_enlai']
-    state.players[0].deck = ['wu_han', 'lin_liguo', 'chen_yi', 'nie_yuanzi', 'zhu_de']
-    state.players[0].board = [instance('mao_zedong')]
-    state.players[0].pendingReturns = [{ ...instance('deng_xiaoping'), returnCount: 1, health: 2, attackOverride: 2 }]
-    const next = act(state, { type: 'END_TURN', player: 1 })
-    expect(next.players[0].hand).toEqual(['zhou_enlai', 'wu_han', 'lin_liguo', 'chen_yi', 'nie_yuanzi'])
-    expect(next.players[0].deck).toEqual(['zhu_de'])
-    expect(next.players[0].pendingReturns).toEqual([])
-    const logs = next.log.slice(state.log.length)
-    const mana = logs.findIndex(line => line.includes('行动力'))
-    const firstDraw = logs.findIndex(line => line.includes('抽了'))
-    const lastDraw = logs.map(line => line.includes('抽了')).lastIndexOf(true)
-    const returned = logs.findIndex(line => line.includes('次复出'))
-    const rolled = logs.findIndex(line => line.includes('指令骰'))
-    expect(mana).toBeGreaterThanOrEqual(0)
-    expect(mana).toBeLessThan(firstDraw)
-    expect(lastDraw).toBeLessThan(returned)
-    expect(returned).toBeLessThan(rolled)
+    state.players[0].hand = Array(count).fill('wu_han')
+    state.players[0].deck = ['lin_liguo', 'may_16_notice', 'chen_yi']
+    const before = structuredClone(state)
+    state = act(state, { type: 'END_TURN', player: 1 })
+    expect(state.players[0].hand).toEqual([...before.players[0].hand, 'lin_liguo', 'may_16_notice'])
+    expect(state.players[0].deck).toEqual(['chen_yi'])
   })
+  it('stops at an empty deck without fatigue and accepts K=0', () => {
+    let state = createGame(characters, () => .5, { energyPerTurn: 2, drawPerTurn: 3 })
+    state.turn = 2; state.currentPlayer = 1
+    state.players[0].deck = ['wu_han']
+    state = act(state, { type: 'END_TURN', player: 1 })
+    expect(state.players[0].hand).toHaveLength(6)
+    expect(state.players[0].hp).toBe(20)
+    expect(state.log.at(-1)).toContain('牌库已空')
+    expect(createGame(characters, () => .5, { energyPerTurn: 1, drawPerTurn: 0 }).players[0].hand).toHaveLength(5)
+    expect(() => createGame(characters, () => .5, { energyPerTurn: 0, drawPerTurn: 2 })).toThrow()
+  })
+  it('sells characters and events permanently, permits energy above E, and forbids replay or resale', () => {
+    let state = fixture()
+    state.players[0].hand = ['mao_zedong', 'may_16_notice', 'zhu_de']
+    const before = structuredClone(state)
+    state = act(state, { type: 'SELL_CARD', player: 0, cardId: 'mao_zedong' })
+    state = act(state, { type: 'SELL_CARD', player: 0, cardId: 'may_16_notice' })
+    expect(state.players[0].mana).toBe(before.players[0].mana + 9)
+    expect(state.players[0].removed).toEqual(['mao_zedong', 'may_16_notice'])
+    expect(before.players[0].removed).toEqual([])
+    expect(applyAction(state, { type: 'SELL_CARD', player: 0, cardId: 'mao_zedong' }, definitions).state).toBe(state)
+    expect(applyAction(state, { type: 'PLAY_CARD', player: 0, cardId: 'mao_zedong' }, definitions).error).toBeTruthy()
+    state = act(state, { type: 'PLAY_CARD', player: 0, cardId: 'zhu_de' })
+    expect(state.players[0].board[0]!.definitionId).toBe('zhu_de')
+  })
+
 })
 
 describe('combat and aura', () => {
@@ -239,15 +239,14 @@ describe('combat and aura', () => {
     expect(applyAction(next, { type: 'END_TURN', player: 0 }, definitions).state).toBe(next)
     expect(applyAction(next, { type: 'END_TURN', player: 0 }, definitions).error).not.toBeNull()
   })
-  it('can finish a deterministic legal match while conserving all 48 unique cards', () => {
+  it('can finish a deterministic legal match while conserving all 60 unique cards', () => {
     let state = fixture()
     for (let turn = 0; turn < 100 && state.winner === null; turn++) {
       const id = state.currentPlayer
       for (const cardId of [...state.players[id].hand]) {
-        if (state.players[id].board.length < 5 && definitions[cardId]!.cost <= state.players[id].mana) {
+        if (state.players[id].board.length < 5 && cardDefinitions[cardId]!.cost <= state.players[id].mana) {
           const enemy = state.players[id === 0 ? 1 : 0]
-          const targetId = playTargets(definitions[cardId]!, state.players[id], enemy)[0]
-          state = act(state, { type: 'PLAY_CARD', player: id, cardId, targetId })
+          state = act(state, { type: 'PLAY_CARD', player: id, cardId })
         }
       }
       for (const card of [...state.players[id].board]) {
@@ -259,10 +258,11 @@ describe('combat and aura', () => {
           state = act(state, { type: 'ATTACK', player: id, attackerId: card.instanceId, target })
         }
       }
-      const all = state.players.flatMap(p => [...p.deck, ...p.hand, ...p.discard,
+      const all = state.players.flatMap(p => [...p.deck, ...p.hand, ...p.discard, ...p.removed,
         ...p.board.map(c => c.definitionId), ...p.pendingReturns.map(c => c.definitionId)])
-      expect(all).toHaveLength(48)
-      expect(new Set(all).size).toBe(48)
+      if (state.activeEvent) all.push(state.activeEvent.id)
+      expect(all).toHaveLength(60)
+      expect(new Set(all).size).toBe(60)
       if (state.winner === null) state = act(state, { type: 'END_TURN', player: id })
     }
     expect(state.winner).not.toBeNull()

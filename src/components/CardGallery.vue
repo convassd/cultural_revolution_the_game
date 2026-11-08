@@ -28,7 +28,7 @@ const visibleCards = computed(() => queryCards(characters, faction.value, sortKe
     </div>
     <div class="gallery-grid"><CharacterCard v-for="card in visibleCards" :key="card.id" :card="card" disabled /></div>
     <p v-if="visibleCards.length === 0" class="muted">没有符合条件的卡牌。</p>
-    <h3 class="event-gallery-heading">事件卡 · 公共卡池</h3>
+    <h3 class="event-gallery-heading">事件卡 · 混合牌库</h3>
     <p class="muted">人物派别筛选仅作用于人物区。事件卡按费用及当前排序方向排列，描述均已实现。</p>
     <div class="gallery-grid"><EventCard v-for="card in [...eventCards].sort((a, b) => direction === 'asc' ? a.cost - b.cost : b.cost - a.cost)" :key="card.id" :card="card" disabled /></div>
   </section>

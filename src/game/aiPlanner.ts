@@ -24,7 +24,6 @@ export interface TurnPlan { steps: PlanStep[]; stats: PlannerStats }
 // Only visible information enters sampling, fingerprints and worker requests.
 export function observeForAi(state: GameState, seat: PlayerId = state.currentPlayer): GameState {
   const view = structuredClone(state)
-  view.eventPool.deck.fill('')
   for (const player of view.players) {
     player.deck.fill('')
     if (player.id !== seat) player.hand.fill('')
@@ -48,19 +47,18 @@ function randomSource(seed: number) {
 }
 function sampleWorld(view: GameState, seat: PlayerId, definitions: Definitions, seed: number): GameState {
   const state = structuredClone(view)
-  const visibleEvents = new Set([...state.eventPool.slots, ...state.eventPool.discard])
-  state.eventPool.deck = shuffle(eventCards.map(card => card.id).filter(id => !visibleEvents.has(id)), randomSource(seed ^ 0x12345)).slice(0, state.eventPool.deck.length)
   const visible = new Set(state.players[seat].hand)
+  if (state.activeEvent) visible.add(state.activeEvent.id)
   for (const player of state.players) {
-    for (const id of player.discard) visible.add(id)
+    for (const id of [...player.discard, ...player.removed]) visible.add(id)
     for (const card of [...player.board, ...player.pendingReturns]) visible.add(card.definitionId)
   }
   const enemy = state.players[seat === 0 ? 1 : 0]
   const revealed = state.revealedHand?.cards.slice(0, enemy.hand.length) ?? []
   for (const id of revealed) visible.add(id)
-  const pool = shuffle(Object.keys(definitions).sort().filter(id => !visible.has(id)), randomSource(seed))
+  const pool = shuffle([...Object.keys(definitions), ...eventCards.map(card => card.id)].sort().filter(id => !visible.has(id)), randomSource(seed))
   let cursor = 0
-  // Repeated IDs are only a fallback for synthetic test fixtures that do not conserve 48 cards.
+  // Repeated IDs are only a fallback for synthetic test fixtures that do not conserve 60 cards.
   const take = () => pool[cursor++ % pool.length] ?? Object.keys(definitions)[0]!
   enemy.hand = [...revealed, ...Array.from({ length: enemy.hand.length - revealed.length }, take)]
   for (const player of state.players) player.deck = Array.from({ length: player.deck.length }, take)
@@ -110,7 +108,7 @@ function replyValue(start: GameState, seat: PlayerId, definitions: Definitions, 
       }
       if (complete) worst = Math.min(worst, value)
       for (const action of legalTurnActions(node.state, definitions)) {
-        if (action.type === 'END_TURN' || (action.type === 'PLAY_CARD' && !enemyKnown.has(action.cardId))) continue
+        if (action.type === 'END_TURN' || ((action.type === 'PLAY_CARD' || action.type === 'SELL_CARD') && !enemyKnown.has(action.cardId))) continue
         if (budget.nodes >= stopAt) break
         const state = advance(node.state, action, definitions, budget)
         if (!state) break
@@ -143,7 +141,7 @@ export function planTurn(input: GameState, definitions: Definitions, options: Pl
     for (const node of frontier) {
       const observation = observationKey(node.state, seat)
       for (const action of legalTurnActions(node.state, definitions)) {
-        if (action.type === 'PLAY_CARD' && !known.has(action.cardId)) continue
+        if ((action.type === 'PLAY_CARD' || action.type === 'SELL_CARD') && !known.has(action.cardId)) continue
         if (budget.nodes >= ownLimit) break
         const state = advance(node.state, action, definitions, budget)
         if (!state) break

@@ -26,7 +26,7 @@ describe('AI worker lifecycle', () => {
     expect(request.state.players[0].hand).toEqual(state.players[0].hand)
     expect(request.state.players[1].hand).toEqual(Array(5).fill(''))
     expect(request.state.players.every((p: { deck: string[] }) => p.deck.every(id => id === ''))).toBe(true)
-    expect(request.state.eventPool.deck).toEqual(Array(12).fill(''))
+    expect(request.state.activeEvent).toBeNull()
     const action = { type: 'END_TURN', player: 0 }
     worker.reply({ id: request.id, action })
     expect(await first).toEqual(action)

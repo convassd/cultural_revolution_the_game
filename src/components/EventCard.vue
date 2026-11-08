@@ -9,12 +9,12 @@ const image = computed(() => `${import.meta.env.BASE_URL}${props.card.image.repl
 
 <template>
   <button type="button" class="event-card" :class="{ selected }" :disabled="disabled" :aria-pressed="selected ?? false"
-    :aria-label="`${card.name}，事件，费用 ${card.cost}，${card.scope}`" @click="$emit('select')">
-    <div class="event-heading"><span class="event-cost">{{ card.cost }}</span><span>事件 · {{ card.scope }}</span></div>
+    :aria-label="`${card.name}，事件，费用 ${card.cost}`" @click="$emit('select')">
+    <div class="event-heading"><span class="event-cost">{{ card.cost }}</span><span>事件</span></div>
     <strong class="event-title">{{ card.name }}</strong>
-    <div class="event-portrait"><img :src="image" alt="事件插画占位" /><small>插画待补</small></div>
+    <div class="event-portrait"><img :src="image" alt="事件插画占位" draggable="false" /><small>插画待补</small></div>
     <p class="event-description" :title="card.description">{{ card.description }}</p>
-    <div class="event-footer">公共卡池 · 使用后弃置</div>
+    <div class="event-footer">打出即生效 · 新事件替换</div>
   </button>
 </template>
 

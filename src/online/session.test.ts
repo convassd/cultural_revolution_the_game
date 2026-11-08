@@ -197,21 +197,17 @@ describe('online connection lifecycle and synchronization', () => {
       expect(host.status.ready && guest.status.ready).toBe(true)
       const actor = host.frame.state.currentPlayer === host.frame.seat ? host : guest
       const legal = legalTurnActions(actor.frame.state, definitions)
-      const action = legal.find(a => a.type === 'SELECT_PLAY_TARGET') ??
-        legal.find(a => a.type === 'USE_EVENT') ??
+      const action =
         legal.find(a => a.type === 'ATTACK' && a.target.type === 'player') ??
         legal.find(a => a.type === 'ATTACK') ??
-        legal.filter(a => a.type === 'PLAY_CARD').sort((a, b) => definitions[b.cardId]!.cost - definitions[a.cardId]!.cost)[0] ??
+        legal.filter(a => a.type === 'PLAY_CARD').sort((a, b) => (definitions[b.cardId]?.cost ?? 0) - (definitions[a.cardId]?.cost ?? 0))[0] ??
         legal.find(a => a.type === 'END_TURN')!
-      // Exercise the human UI's separate entry-target step rather than supplying targets inline.
-      if (action.type === 'PLAY_CARD') delete action.targetId
       actor.session.submit(action); await flush(); actions++
       expect(host.frame.revision).toBe(guest.frame.revision)
       expect(host.frame.state.players.map(p => p.board)).toEqual(guest.frame.state.players.map(p => p.board))
       expect(host.frame.state.players.map(p => p.hp)).toEqual(guest.frame.state.players.map(p => p.hp))
       expect(host.frame.state.log).toEqual(guest.frame.state.log)
-      expect(host.frame.state.eventPool).toEqual(guest.frame.state.eventPool)
-      expect(host.frame.state.eventPool.deck.every(id => id === '')).toBe(true)
+      expect(host.frame.state.activeEvent).toEqual(guest.frame.state.activeEvent)
       expect(host.errors).toEqual([]); expect(guest.errors).toEqual([])
     }
     expect(actions).toBeLessThan(1500)

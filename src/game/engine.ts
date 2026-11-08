@@ -1,10 +1,10 @@
 import { resolveCombat } from './combat'
-import { BOARD_LIMIT, EVENT_UNLOCK_TURN, canAttackPlayer, effectiveAttack, effectiveFaction, INITIAL_HAND_SIZE, INITIAL_HP, INITIAL_MANA, MAX_MANA, playTargets, TARGET_HAND_SIZE } from './rules'
+import { BOARD_LIMIT, CHARACTERS_PER_EVENT, DEFAULT_RULES, canAttackPlayer, effectiveAttack, effectiveFaction, INITIAL_HAND_SIZE, INITIAL_HP } from './rules'
 import { applyDamageBatch, beginCharacterTurn, createCharacter, endCharacterTurn, recordLog as log, removeDead } from './effects'
 import { ABILITIES } from '../data/abilities'
 import { eventCards, eventDefinitions } from '../data/events'
 import { resolveEvent } from './eventEffects'
-import type { ActionResult, CharacterDefinition, GameAction, GameEvent, GameState, PlayerId, PlayerState } from './types'
+import type { ActionResult, CardDefinition, CharacterDefinition, CharacterInstance, GameAction, GameEvent, GameState, GameRules, PlayerId, PlayerState } from './types'
 
 export type RandomSource = () => number
 export type Definitions = Readonly<Record<string, CharacterDefinition>>
@@ -38,42 +38,58 @@ function startTurn(state: GameState, definitions: Definitions, random: RandomSou
     }
   }
   const player = state.players[state.currentPlayer]
-  player.maxMana = player.maxMana === 0 ? INITIAL_MANA : Math.min(MAX_MANA, player.maxMana + 1)
-  player.mana = player.maxMana
-  state.eventPool.usedThisTurn = false
-  if (state.turn === EVENT_UNLOCK_TURN) state.eventPool.slots = [state.eventPool.deck.shift() ?? null, state.eventPool.deck.shift() ?? null]
+  player.maxMana = state.rules.energyPerTurn
+  const openingBonus = state.turn === 2 ? (state.rules.secondPlayerOpeningBonus ?? 0) : 0
+  player.mana = player.maxMana + openingBonus
   log(state, `第 ${Math.ceil(state.turn / 2)} 轮：玩家 ${player.id + 1} 的回合，行动力 ${player.mana}。`)
-  while (player.hand.length < TARGET_HAND_SIZE) {
+  if (openingBonus) log(state, `后手首回合补偿：额外 ${openingBonus} 行动力，仅本回合可用。`)
+  for (let i = 0; state.turn > 2 && i < state.rules.drawPerTurn; i++) {
     if (!draw(state, player)) break
   }
   beginCharacterTurn(state, definitions, random, events)
 }
 
-export function createGame(cards: readonly CharacterDefinition[], random: RandomSource = Math.random): GameState {
+export function createGame(cards: readonly CharacterDefinition[], random: RandomSource = Math.random, rules: GameRules = DEFAULT_RULES): GameState {
+  if (!Number.isInteger(rules.energyPerTurn) || rules.energyPerTurn < 1 || !Number.isInteger(rules.drawPerTurn) || rules.drawPerTurn < 0) throw new Error("E 必须为正整数，K 必须为非负整数。")
+  if (!Number.isInteger(rules.secondPlayerOpeningBonus ?? 0) || (rules.secondPlayerOpeningBonus ?? 0) < 0) throw new Error('后手首回合补偿必须为非负整数。')
   if (cards.length !== 48 || new Set(cards.map(c => c.id)).size !== 48) {
     throw new Error('新游戏需要 48 张不同的人物卡。')
   }
-  const ids = shuffle(cards.map(c => c.id), random)
+  const characterIds = shuffle(cards.map(c => c.id), random)
+  const eventIds = shuffle(eventCards.map(c => c.id), random)
   function player(id: PlayerId): PlayerState {
-    const deck = ids.slice(id * 24, (id + 1) * 24)
-    return { id, hp: INITIAL_HP, mana: 0, maxMana: 0,
-      hand: deck.splice(0, INITIAL_HAND_SIZE), deck, board: [], discard: [], pendingReturns: [], mediationUsed: false }
+    const charactersPerPlayer = characterIds.length / 2, eventsPerPlayer = eventIds.length / 2
+    const ownCharacters = characterIds.slice(id * charactersPerPlayer, (id + 1) * charactersPerPlayer)
+    const ownEvents = eventIds.slice(id * eventsPerPlayer, (id + 1) * eventsPerPlayer)
+    const deck = ownEvents.flatMap((eventId, index) => [
+      ...ownCharacters.slice(index * CHARACTERS_PER_EVENT, (index + 1) * CHARACTERS_PER_EVENT), eventId,
+    ])
+    return { id, hp: INITIAL_HP, mana: 0, maxMana: rules.energyPerTurn,
+      hand: deck.splice(0, INITIAL_HAND_SIZE), deck, board: [], discard: [], removed: [], pendingReturns: [], mediationUsed: false }
   }
   const state: GameState = {
-    eventPool: { deck: shuffle(eventCards.map(card => card.id), random), slots: [null, null], discard: [], usedThisTurn: false },
+    rules: { ...rules }, activeEvent: null,
     players: [player(0), player(1)], currentPlayer: 0, turn: 1,
     winner: null, nextInstanceId: 1, revealedHand: null,
-    pendingPlayTarget: null,
-    log: [`新游戏：双方各 24 张牌；双方起手 ${INITIAL_HAND_SIZE} 张，己方回合开始补至 ${TARGET_HAND_SIZE} 张。`],
+    log: [`新游戏：双方各 24 张人物、6 张事件，每 ${CHARACTERS_PER_EVENT} 张人物穿插 1 张事件；起手 ${INITIAL_HAND_SIZE} 张，之后每回合抽 ${rules.drawPerTurn} 张，行动力重置为 ${rules.energyPerTurn}。`],
   }
-  // The opening turn follows the same draw rule as every later turn.
+  // startTurn skips each player's opening draw; the opening hand stays at five.
   startTurn(state, Object.fromEntries(cards.map(card => [card.id, card])), random)
   return state
 }
 
-function applyTargetedEntry(state: GameState, card: CharacterDefinition, targetId: string, definitions: Definitions) {
+function applyAutomaticEntry(state: GameState, card: CharacterDefinition, sourceId: string, definitions: Definitions) {
   const owner = card.abilityId === 'BUFF_ONE' ? state.currentPlayer : state.currentPlayer === 0 ? 1 : 0
-  const target = state.players[owner].board.find(c => c.instanceId === targetId)!
+  const board = state.players[owner].board
+  let target: CharacterInstance | undefined
+  let highestAttack = -Infinity
+  // Strictly greater preserves the leftmost tie. Use live attack after entry/aura updates.
+  for (const candidate of board) {
+    if (candidate.instanceId === sourceId || candidate.health <= 0) continue
+    const attack = effectiveAttack(candidate, board, definitions, state.activeEvent?.id)
+    if (attack > highestAttack) { target = candidate; highestAttack = attack }
+  }
+  if (!target) { log(state, `${card.name}：没有合法目标，跳过登场技能。`); return }
   const change = card.abilityId === 'BUFF_ONE' ? 1 : -1
   if (card.abilityId === 'WEAKEN') {
     target.attackModifiers ??= []
@@ -87,7 +103,6 @@ export function applyAction(state: GameState, action: GameAction, definitions: D
   const reject = (error: string): ActionResult => ({ state, error, events: [] })
   if (action.player !== state.currentPlayer) return reject('尚未轮到该玩家。')
   if (state.winner !== null) return reject('对局已经结束，请开始新游戏。')
-  if (state.pendingPlayTarget && action.type !== 'SELECT_PLAY_TARGET') return reject('请先选择登场技能的目标。')
   // All mutations below affect a fresh copy; the input snapshot stays intact.
   const next: GameState = structuredClone(state)
   const events: GameEvent[] = []
@@ -95,28 +110,31 @@ export function applyAction(state: GameState, action: GameAction, definitions: D
   const enemy = next.players[action.player === 0 ? 1 : 0]
 
   switch (action.type) {
-    case 'USE_EVENT': {
-      const slot = next.eventPool.slots.indexOf(action.eventId)
-      const card = eventDefinitions[action.eventId]
-      if (next.turn < EVENT_UNLOCK_TURN || slot < 0 || !card) return reject('该事件当前不可使用。')
-      if (next.eventPool.usedThisTurn) return reject('每个玩家每回合最多使用一张事件卡。')
-      if (player.mana < card.cost) return reject('行动力不足。')
-      player.mana -= card.cost
-      next.eventPool.usedThisTurn = true
-      log(next, `玩家 ${player.id + 1} 使用 ${card.name}（${card.cost} 行动力）：${card.description}`)
-      resolveEvent(next, card.id, definitions, events)
-      next.eventPool.discard.push(card.id)
-      next.eventPool.slots[slot] = next.eventPool.deck.shift() ?? null
+    case 'SELL_CARD': {
+      const index = player.hand.indexOf(action.cardId)
+      const card = (definitions[action.cardId] as CardDefinition | undefined) ?? eventDefinitions[action.cardId]
+      if (index < 0 || !card) return reject('这张牌不在你的手牌中。')
+      player.hand.splice(index, 1)
+      player.removed.push(card.id)
+      player.mana += card.cost
+      log(next, `玩家 ${player.id + 1} 卖出 ${card.name}，获得 ${card.cost} 行动力；该牌永久移除。`)
       break
     }
     case 'PLAY_CARD': {
       const index = player.hand.indexOf(action.cardId)
-      const card = definitions[action.cardId]
+      const card = (definitions[action.cardId] as CardDefinition | undefined) ?? eventDefinitions[action.cardId]
       if (index < 0 || !card) return reject('这张牌不在你的手牌中。')
-      if (player.board.length >= BOARD_LIMIT) return reject('己方场地已满。')
       if (player.mana < card.cost) return reject('行动力不足。')
-      const targets = playTargets(card, player, enemy)
-      if (action.targetId !== undefined && !targets.includes(action.targetId)) return reject('该登场技能没有这个合法目标。')
+      if (card.type === 'event') {
+        player.mana -= card.cost
+        player.hand.splice(index, 1)
+        if (next.activeEvent) next.players[next.activeEvent.owner].discard.push(next.activeEvent.id)
+        next.activeEvent = { id: card.id, owner: player.id }
+        log(next, `玩家 ${player.id + 1} 打出事件「${card.name}」：${card.description}`)
+        resolveEvent(next, card.id, definitions, events)
+        break
+      }
+      if (player.board.length >= BOARD_LIMIT) return reject('己方场地已满。')
       const hadGroupMember = !!card.relationGroup && player.board.some(c =>
         definitions[c.definitionId]!.relationGroup === card.relationGroup)
       player.mana -= card.cost
@@ -130,7 +148,7 @@ export function applyAction(state: GameState, action: GameAction, definitions: D
           log(next, `${card.name}「${ABILITIES.MAO_RANDOM_COMMAND.name}」：玩家 ${player.id + 1} 恢复 5 HP，当前 ${player.hp} HP。`)
           break
         case 'JIANG_BORROW_POWER': {
-          const index = player.deck.findIndex(id => definitions[id]!.faction === '造反派')
+          const index = player.deck.findIndex(id => definitions[id]?.faction === '造反派')
           if (index >= 0) {
             player.hand.push(player.deck.splice(index, 1)[0]!)
             log(next, `${card.name}「${ABILITIES.JIANG_BORROW_POWER.name}」：抽了 1 张造反派。`)
@@ -146,9 +164,7 @@ export function applyAction(state: GameState, action: GameAction, definitions: D
           break
         case 'BUFF_ONE':
         case 'WEAKEN': {
-          if (action.targetId !== undefined) applyTargetedEntry(next, card, action.targetId, definitions)
-          else if (targets.length) next.pendingPlayTarget = { cardId: card.id, targetIds: targets }
-          else log(next, `${card.name}：没有合法目标，跳过登场技能。`)
+          applyAutomaticEntry(next, card, instanceId, definitions)
           break
         }
         case 'REVEAL_HAND':
@@ -158,21 +174,11 @@ export function applyAction(state: GameState, action: GameAction, definitions: D
       }
       break
     }
-    case 'SELECT_PLAY_TARGET': {
-      const pending = next.pendingPlayTarget
-      if (!pending || !pending.targetIds.includes(action.targetId)) return reject('请选择合法的登场技能目标。')
-      const card = definitions[pending.cardId]!
-      const targetBoard = card.abilityId === 'BUFF_ONE' ? player.board : enemy.board
-      if (!targetBoard.some(c => c.instanceId === action.targetId)) return reject('目标已经离场。')
-      applyTargetedEntry(next, card, action.targetId, definitions)
-      next.pendingPlayTarget = null
-      break
-    }
     case 'ATTACK': {
       const attacker = player.board.find(c => c.instanceId === action.attackerId)
       if (!attacker) return reject('攻击者不在己方场上。')
       if (!attacker.canAttack) return reject('该角色本回合不能攻击或已经攻击。')
-      const attack = effectiveAttack(attacker, player.board, definitions)
+      const attack = effectiveAttack(attacker, player.board, definitions, next.activeEvent?.id)
       const attackerDefinition = definitions[attacker.definitionId]!
       if (action.target.type === 'player') {
         if (!canAttackPlayer(enemy, definitions)) return reject('敌方保卫在场，不能直接攻击玩家。')
@@ -186,7 +192,7 @@ export function applyAction(state: GameState, action: GameAction, definitions: D
         const defenderDefinition = definitions[defender.definitionId]!
         const result = resolveCombat(
           { attack, health: attacker.health, faction: effectiveFaction(attacker, definitions) },
-          { attack: effectiveAttack(defender, enemy.board, definitions), health: defender.health, faction: effectiveFaction(defender, definitions) },
+          { attack: effectiveAttack(defender, enemy.board, definitions, next.activeEvent?.id), health: defender.health, faction: effectiveFaction(defender, definitions) },
         )
         const applied = applyDamageBatch(next, [
           { instanceId: attacker.instanceId, amount: result.toAttacker },
@@ -212,6 +218,7 @@ export function applyAction(state: GameState, action: GameAction, definitions: D
       next.turn += 1
       startTurn(next, definitions, random, events)
       break
+    default: return reject('无效操作。')
   }
   return { state: next, error: null, events }
 }

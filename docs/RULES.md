@@ -7,13 +7,16 @@ These are the current mechanics, including the five revised SSR abilities. Engli
 A **turn** is one player's action phase, from its start to its end. A **round** consists of one turn from each player. The engine counts individual turns (1, 2, 3, ...); the displayed round is `Math.ceil(turn / 2)`. A player-relative duration never expires merely because a round boundary is crossed.
 
 - Both players start with 20 HP. There are no hero classes or hero powers.
-- Shuffle all 48 unique characters, then divide them into two 24-card decks. Each character appears only once per game.
-- Both seats draw five starting cards, leaving 19 cards in each deck. The opening turn does not draw extra cards when its hand already contains five.
-- AI and online multiplayer randomly assign each player to either seat with equal probability. Seat 1 opens; your own hand and battlefield are always displayed at the bottom.
-- Each player's first turn has two maximum action points. Each later turn of that player increases the maximum by one, up to ten. Turn start refills the current amount, then draws from the deck until the hand reaches five, before processing returns and other turn-start abilities.
-- Five is a refill target, not a hand-size limit. A hand containing five or more skips the automatic draw and never discards excess cards. Entry abilities may draw even when the remaining hand already contains five or more cards.
-- A refill stops when the deck is empty. There is no fatigue damage or hand-size limit.
+- Shuffle the 48 characters and 12 events separately, then split each type evenly. Each private deck has 24 characters and six events, interleaved as four characters followed by one event, repeated six times. Every card appears once per game. Opening hands therefore contain four characters and one event.
+- A conditional draw such as Jiang Qing's draws the first matching card out of order, preserving the order of all others. No automatic re-interleaving occurs after skill draws. Ordinary extra draws take the next card as usual.
+- Both players draw five starting cards, leaving 25 cards in each deck. Each player's first turn skips automatic drawing; subsequent turns draw exactly K cards before return/directive effects, regardless of hand size.
+- AI and online multiplayer randomly assign each player to either seat. Seat 1 opens; your own hand and battlefield stay at the bottom.
+- Energy resets to E at each own turn start and does not grow. Unspent energy is not saved for the next turn. Sell any hand card during the action phase to gain its printed cost in energy; the sold card is permanently removed, with no entry/death effect. Selling is unlimited and can take current energy above E.
+- Current defaults: **E = 4, K = 3**. The second seat receives **+6 energy on its first turn only**, starting that turn with 10 current energy and base E = 4. There is no extra opening card, and subsequent turns reset to 4. This provisional compensation does not eliminate the measured first-seat advantage.
+- Hand cards are retained without a limit or mandatory discard. Extra skill draws still work. An empty deck stops drawing without fatigue.
+- E, K and `secondPlayerOpeningBonus` are stored in the match's `rules` object. Defaults live in `DEFAULT_RULES` in `src/game/rules.ts`; see the current [hand-flow evaluation](../reports/hand-flow-evaluation.md) for measured results. The earlier [economy report](../reports/economy-evaluation.md) is a historical snapshot.
 - Each side has at most five characters in play. Playing pays the card's cost and removes it from the hand. There is no undo.
+- Select a hand character and click any friendly battlefield slot, or drag it there; it appends to the board and aligns left, including when the clicked slot already contains a character. Select/drag an event to the active-event area to replace it. Select a hand card and click the left-hand trash slot, or drag it there, to sell it. The right column contains energy and End Turn only. Wrong destinations or insufficient resources do not consume the card.
 
 There is no deck building, collection system, duplicate card, mulligan or saved game.
 
@@ -53,17 +56,17 @@ All eight are implemented. In-game names and descriptions come from [abilities.t
 | Ability ID | Chinese name / English rendering | Behavior |
 | --- | --- | --- |
 | `TOUGH` | 申辩 / Defense | Reduce the first positive damage received in each global turn by one. Reducing one damage to zero still consumes the use; an original zero-damage hit does not. Applies to retaliation. |
-| `BUFF_ONE` | 声援 / Support | On entry, another friendly character gains +1 attack for this turn. Resting characters are eligible; the entering character cannot target itself. |
+| `BUFF_ONE` | 声援 / Support | On entry, automatically give the other friendly character with the highest current attack +1 attack for this turn. Ties use the leftmost character. Resting characters are eligible; the entering character is excluded. |
 | `DRAW_ONE` | 串联 / Networking | On entry, draw one card. Skip if the deck is empty. |
 | `REVEAL_HAND` | 调查材料 / Investigation Materials | Replace the enemy hand backs in the middle row with names from a snapshot of their current hand, with text and borders colored by printed faction (blue, red, green or beige). The caster's next selection or game action restores the backs. Scroll horizontally to read long hands. |
 | `GROUP_DRAW` | 动员 / Mobilization | On entry, draw one card if another friendly member of the character's group was already in play. The entering character and enemy members do not count. |
 | `CHARGE` | 冲击 / Assault | Can attack on the entry turn, still at most once per turn. |
-| `WEAKEN` | 大字报 / Big-Character Poster | On entry, an enemy character loses one attack until the start of the caster's next turn. This affects retaliation immediately and attacks throughout the enemy's next turn. |
+| `WEAKEN` | 上纲上线 / Escalation | On entry, automatically reduce the highest-current-attack enemy character by one until the start of the caster's next turn. Ties use the leftmost character. This affects retaliation immediately and attacks throughout the enemy's next turn. |
 | `GUARD` | 保卫 / Protection | While in play, enemy characters cannot directly attack its player. They can still attack any friendly character. |
 
-Temporary attack changes stack with each other and with group auras. Effective attack cannot fall below zero. “This turn only” modifiers (Support, Rectification and event attack changes) expire at the current player's turn end. Big-Character Poster expires at the start of the caster's next turn, before any turn-start effects, regardless of seat or round boundary. Its source leaving play does not remove the effect early; death clears it from the affected character before any return. Damage-reduction uses reset at the beginning of either player's turn.
+Temporary attack changes stack with each other and with group auras. Effective attack cannot fall below zero. “This turn only” modifiers (Support and Deng's Rectification) expire at the current player's turn end. Active event attack auras persist until the event is replaced. Escalation expires at the start of the caster's next turn, before any turn-start effects, regardless of seat or round boundary. Its source leaving play does not remove the effect early; death clears it from the affected character before any return. Damage-reduction uses reset at the beginning of either player's turn.
 
-For targeted entry abilities, clicking Play immediately spends resources and places the character on the battlefield. If eligible targets exist, target selection is mandatory before any further game action. If none exist, skip the entry effect. Drawing, revealing and other automatic entry effects resolve immediately.
+All character entry abilities resolve in the play action, without manual target selection or a follow-up phase. Support and Escalation compare effective attack after the entering character has joined the battlefield, including current relationship, event, faction-override and temporary effects. Equal effective attack (including values floored to zero) ties by battlefield order. Skip the ability when its eligible side is empty; playing, selling and ending the turn remain immediately available. Ordinary attacks still use a player-selected enemy target.
 
 ## Unique abilities
 
@@ -101,34 +104,32 @@ Each actual return also triggers **整顿 / Rectification**: other living friend
 
 Four cost, three attack, five HP. **借势 / Borrowed Power.** On entry, draw the first Rebel in deck order, leaving the other cards in their previous order. Skip the draw if none remain. While a living friendly Mao Zedong is in play, Jiang gains +2 attack as a dynamic aura. An enemy Mao grants no bonus. This stacks with her usual relationship-group aura and temporary attack modifiers; Mao leaving removes it immediately. Completing the Gang of Four no longer deals damage to the enemy player.
 
-## Public event cards
+## Persistent global events
 
-The 12 unique events in [events.json](../src/data/events.json) are shuffled into a separate shared deck. They never enter either player's character deck or hand. No events are shown or usable during individual turns 1–7. At the start of player 2's turn in round 4 (individual turn 8), reveal two public slots to the right of the characters. Both players use these same slots.
+Events are private hand/deck cards and can be played or sold from the opening turn. Playing pays the cost, removes the event from hand and replaces the one shared active event. The old event enters its original owner's discard pile. Events never occupy a character slot. Multiple events may be played in one turn if affordable.
 
-Select an event, then click Use Event to pay its action-point cost. Each player can use at most one event during each of their own turns, even if enough resources remain for another. Usage resets when the active player changes. Discard the used event permanently and immediately refill that same slot from the shared deck. There is no reshuffle or replenishment after all 12 cards are used. Event use requires no target selection and is blocked during unfinished entry-target selection.
+Every event affects both sides. Continuous attack auras last until replacement, affect later arrivals/returns and use current factions and group memberships. The old aura stops immediately on replacement; independent character skill durations retain their own deadlines. Damage, healing, drawing, setting HP to one and direct removal occur once on entry, not every turn. Replacing the event never reverses those one-shot effects.
 
-| ID | Chinese name / English rendering | Cost / scope | Effect |
+January Storm checks each player independently for a friendly Gang of Four member and draws one mixed-deck card for each qualifying player. Wen Gong Wu Wei damages Rebels on both sides once. Comprehensive Rectification heals wounded characters on both sides once, capped at printed health. HP-setting and direct removal retain the existing damage/death semantics.
+
+| ID | In-game name | Cost | Current card text |
 | --- | --- | --- | --- |
-| `february_outline` | 「二月提纲」 / February Outline | 1 / global | All Rebels lose 1 attack this turn. |
-| `may_16_notice` | 「五一六通知」 / May 16 Notice | 2 / global | All Rebels gain 1 attack and Conservatives lose 1 this turn. |
-| `bombard_headquarters` | 「炮打司令部」 / Bombard the Headquarters | 3 / global | Set Liu Shaoqi and Deng Xiaoping in play to 1 HP; other Conservatives lose 1 attack this turn. |
-| `january_storm` | 「一月风暴」 / January Storm | 3 / friendly | Friendly Rebels gain 2 attack this turn. Draw one character if a friendly Gang of Four member is in play. |
-| `february_countercurrent` | 「二月逆流」 / February Countercurrent | 3 / global | Conservatives and Military gain 1 attack, Rebels lose 1 this turn. Chen Yi, Ye Jianying, Xu Xiangqian, Tan Zhenlin, Li Fuchun and Li Xiannian gain another 1. |
-| `july_20_incident` | 「七二〇事件」 / July 20 Incident | 3 / global | Set Wang Li and Chen Zaidao in play to 1 HP; all Military and Rebels gain 1 attack this turn. |
-| `wen_gong_wu_wei` | 「文攻武卫」 / Civil Attack, Armed Defense | 2 / friendly | Deal 1 damage to friendly Rebels, resolve deaths, then surviving friendly Rebels gain 2 attack this turn. |
-| `purge_may_16` | 「清查五一六」 / Purge of May 16 | 3 / global | Deal 1 damage to all Rebels; Poisonous Weeds members take 2 instead, as one combined hit. |
-| `september_13_incident` | 「九一三事件」 / September 13 Incident | 4 / global | Directly remove any Lin Biao in play, triggering his normal departure blast; other surviving Lin-group members lose 2 attack this turn. With no Lin present, only the attack reduction occurs. |
-| `comprehensive_rectification` | 「全面整顿」 / Comprehensive Rectification | 3 / friendly | Heal each wounded friendly character by 1, capped at printed health; friendly Conservatives gain 1 attack this turn. |
-| `april_5_incident` | 「四五天安门事件」 / April 5 Tiananmen Incident | 3 / global | Gang of Four members take 1 damage and survivors lose 1 attack this turn; also set Deng Xiaoping in play to 1 HP. |
-| `huairentang_incident` | 「怀仁堂事变」 / Huairentang Incident | 5 / global | Directly remove all Gang of Four members on both sides; other surviving Rebels lose 1 attack this turn. |
-
-Attack changes affect characters already in play when the effect resolves, use current faction overrides, stack with other temporary changes and auras, and expire at the end of the current player's turn. Later entrants do not inherit these changes. Effective attack remains at least zero. Global effects include both players; friendly effects refer to the event user.
-
-Event damage has no faction bonus, uses normal reduction and Mediation, and can trigger deaths, Deng returns and Lin's departure blast. Area hits resolve together before removal waves. Wen Gong Wu Wei and similar damage-then-buff effects resolve deaths and blasts before applying attack changes to survivors. HP-setting bypasses damage reduction and Mediation without killing a character at 1 HP; it does not consume Tough or Deng's returns. Direct removal bypasses damage reduction and Mediation but retains ordinary departure/return triggers. Healing uses printed health even for returned Deng; it never lowers an already higher HP value. January Storm draws past the five-card target and skips an empty deck.
+| `february_outline` | 「二月提纲」 | 1 | Aura: Rebels -1 attack until replacement. |
+| `may_16_notice` | 「五一六通知」 | 2 | Aura: Rebels +1 attack; Conservatives -1. |
+| `bombard_headquarters` | 「炮打司令部」 | 3 | Entry: set Liu Shaoqi and Deng Xiaoping to 1 HP. Aura: other Conservatives -1 attack. |
+| `january_storm` | 「一月风暴」 | 3 | Aura: Rebels +2 attack. Entry: each player with a friendly Gang of Four member draws one card. |
+| `february_countercurrent` | 「二月逆流」 | 3 | Aura: Conservatives/Military +1 attack; Rebels -1. Chen Yi, Ye Jianying, Xu Xiangqian, Tan Zhenlin, Li Fuchun and Li Xiannian gain another +1. |
+| `july_20_incident` | 「七二〇事件」 | 3 | Entry: set Wang Li and Chen Zaidao to 1 HP. Aura: Military/Rebels +1 attack. |
+| `wen_gong_wu_wei` | 「文攻武卫」 | 2 | Entry: deal 1 damage to all Rebels. Aura: Rebels +2 attack. |
+| `purge_may_16` | 「清查五一六」 | 3 | Entry: deal 1 damage to Rebels; Poisonous Weeds members take one combined 2-damage hit instead. |
+| `september_13_incident` | 「九一三事件」 | 4 | Entry: directly remove Lin Biao, triggering his departure blast. Aura: other Lin-group members -2 attack. |
+| `comprehensive_rectification` | 「全面整顿」 | 3 | Entry: heal all wounded characters by 1, capped at printed health. Aura: Conservatives +1 attack. |
+| `april_5_incident` | 「四五天安门事件」 | 3 | Entry: set Deng to 1 HP and deal 1 damage to Gang of Four members. Aura: Gang members -1 attack. |
+| `huairentang_incident` | 「怀仁堂事变」 | 5 | Entry: directly remove every Gang of Four member. Aura: other Rebels -1 attack. |
 
 ## Trigger and damage order
 
-- Turn start: expire attack modifiers due at this turn start; increase/refill action points and draw up to the five-card target; reset damage reduction and both players' Mediation uses; ready existing friendly characters; process friendly pending returns and Rectification; roll Mao's directive. Returns happen after attack readiness is restored, so returnees rest.
+- Turn start: expire attack modifiers due at this turn start; reset action points to E and draw K cards (skip each player's first draw); reset damage reduction and both players' Mediation uses; ready existing friendly characters; process friendly pending returns and Rectification; roll Mao's directive. Returns happen after attack readiness is restored, so returnees rest.
 - Turn end: resolve Lin's countdown and explosion; clear only this-turn attack modifiers on both sides and the revealed-hand snapshot; switch the active player and begin the next turn.
 - Entry plays resolve their entry ability immediately, except mandatory target selection when a target is required. Mao's healing and Jiang's faction-specific draw do not require a target.
 - Combat attack values are computed before damage. Area damage deducts HP simultaneously; process damage reduction, direct-death flags, Mediation, then removals and pending returns. Remove a lethal batch before processing Lin's departure explosion; process any resulting deaths in the next wave. Each departure resolves once. Ability damage has no faction bonus.
@@ -144,6 +145,6 @@ Damage indicators show actual post-reduction damage; a fully reduced hit display
 
 When the opponent ends their turn and local controls become available, a brief two-note sound announces your turn. Initial setup and your own actions do not play this cue. Browser audio is unlocked by the start/create/join click and needs no downloaded audio assets.
 
-Enemy hands show backs and counts unless revealed. Multiplayer sends the guest only its own hand, with hidden deck contents and enemy-hand placeholders. Shared event slots and discarded events are public; the remaining event order stays hidden from the guest and AI. The host runs the full state and remains trusted; this is casual P2P play rather than protection against host cheating.
+Enemy hands show backs and counts unless revealed. Multiplayer sends the guest only its own hand, with hidden deck contents and enemy-hand placeholders. The active event, discarded cards and sold cards are public. Unplayed events in hands/decks stay hidden from the guest and AI. The host runs the full state and remains trusted; this is casual P2P play rather than protection against host cheating.
 
 After final battle effects, the central result animation lasts about 3.6 seconds. Both AI and online games show **全面胜利** (Complete Victory) or **退出舞台** (Exit the Stage) from the local player's perspective. The turn bar retains the result after the animation fades. Sound is generated locally in the browser and stops on exit or AI restart. After an online match finishes, only the host can start a new match; both browsers keep their connection and receive newly randomized seats.

@@ -110,15 +110,17 @@ describe('bounded turn planner', () => {
       expect(legalTurnActions(state, definitions)).toContainEqual(expired.steps[0]!.action)
     } finally { clock.mockRestore() }
   })
-  it('resolves a committed mandatory entry target before other actions', () => {
+  it('continues its plan after an automatic entry without a pending target phase', () => {
     const state = fixture()
     state.players[0].board = [ready('wu_han')]
     state.players[0].hand = ['zhang_chunqiao']
-    const pending = applyAction(state, { type: 'PLAY_CARD', player: 0, cardId: 'zhang_chunqiao' }, definitions).state
-    const action = planTurn(pending, definitions).steps[0]!.action
-    expect(action).toEqual({ type: 'SELECT_PLAY_TARGET', player: 0, targetId: 'wu_han' })
-    expect(applyAction(pending, action, definitions).error).toBeNull()
+    const played = applyAction(state, { type: 'PLAY_CARD', player: 0, cardId: 'zhang_chunqiao' }, definitions).state
+    expect(played.players[0].board[0]!.temporaryAttack).toBe(1)
+    const action = planTurn(played, definitions).steps[0]!.action
+    expect(['ATTACK', 'END_TURN']).toContain(action.type)
+    expect(applyAction(played, action, definitions).error).toBeNull()
   })
+
   it('caches a valid continuation but replans after an unexpected observed draw', () => {
     const planner = new TurnPlanner()
     let state = fixture()
@@ -146,7 +148,7 @@ describe('bounded turn planner', () => {
     expect(planTurn(state, definitions).steps).toEqual([])
     expect(new TurnPlanner().next(state, definitions).action).toBeNull()
   })
-  it.each([0, 1] as const)('finishes a seeded match from seat %i with legal continuations and 48 conserved cards', seat => {
+  it.each([0, 1] as const)('finishes a seeded match from seat %i with legal continuations and 60 conserved cards', seat => {
     let seed = 90001 + seat
     const random = () => ((seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0) / 4294967296)
     let state = createGame(characters, random)
@@ -161,13 +163,14 @@ describe('bounded turn planner', () => {
       const result = applyAction(state, action!, definitions, random)
       expect(result.error).toBeNull()
       state = result.state
-      const all = state.players.flatMap(p => [...p.deck, ...p.hand, ...p.discard,
+      const all = state.players.flatMap(p => [...p.deck, ...p.hand, ...p.discard, ...p.removed,
         ...p.board.map(c => c.definitionId), ...p.pendingReturns.map(c => c.definitionId)])
-      expect(all).toHaveLength(48)
-      expect(new Set(all).size).toBe(48)
-      const pool = [...state.eventPool.deck, ...state.eventPool.slots.filter(id => id !== null), ...state.eventPool.discard]
-      expect(pool).toHaveLength(12)
-      expect(new Set(pool).size).toBe(12)
+      if (state.activeEvent) all.push(state.activeEvent.id)
+    expect(all).toHaveLength(60)
+      expect(new Set(all).size).toBe(60)
+
+
+
     }
     expect(state.winner).not.toBeNull()
     expect(reused).toBeGreaterThan(0)
@@ -175,7 +178,23 @@ describe('bounded turn planner', () => {
 })
 
 describe('planner with lasting attack reduction', () => {
-  it.each([0, 1] as const)('uses Poster to survive enemy next-turn lethal from caster seat %s', caster => {
+  it('plans a sale, a charge play and lethal without spending an imaginary draw', () => {
+    let state = fixture()
+    state.players[0].mana = 1
+    state.players[0].hand = ['mao_zedong', 'wang_hongwen']
+    state.players[1].hp = 5
+    const plan = planTurn(state, definitions)
+    expect(plan.steps.map(s => s.action.type)).toEqual(['SELL_CARD', 'PLAY_CARD', 'ATTACK'])
+    expect(plan.steps[0]!.action).toMatchObject({ cardId: 'mao_zedong' })
+    for (const step of plan.steps) {
+      const result = applyAction(state, step.action, definitions)
+      expect(result.error).toBeNull()
+      state = result.state
+    }
+    expect(state.winner).toBe(0)
+    expect(state.players[0].hp).toBe(20)
+  })
+  it.each([0, 1] as const)('uses Escalation to survive enemy next-turn lethal from caster seat %s', caster => {
     let state = fixture()
     const enemy = caster === 0 ? 1 : 0
     state.currentPlayer = caster
@@ -185,7 +204,7 @@ describe('planner with lasting attack reduction', () => {
     state.players[caster].hand = ['guan_feng']
     state.players[enemy].board = [ready('nie_yuanzi')]
     const plan = planTurn(state, definitions)
-    expect(plan.steps[0]!.action).toMatchObject({ type: 'PLAY_CARD', player: caster, cardId: 'guan_feng', targetId: 'nie_yuanzi' })
+    expect(plan.steps[0]!.action).toMatchObject({ type: 'PLAY_CARD', player: caster, cardId: 'guan_feng' })
     state = applyAction(state, plan.steps[0]!.action, definitions).state
     expect(observeForAi(state).players[enemy].board[0]!.attackModifiers).toEqual([{ amount: -1, expiresAtTurn: caster + 5 }])
     state = applyAction(state, { type: 'END_TURN', player: caster }, definitions).state

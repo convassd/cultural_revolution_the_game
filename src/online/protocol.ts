@@ -1,12 +1,12 @@
 import { characters, definitions } from '../data'
 import { eventCards } from '../data/events'
 import { applyAction, createGame, type RandomSource } from '../game/engine'
-import { BOARD_LIMIT, EVENT_UNLOCK_TURN, INITIAL_HAND_SIZE, INITIAL_HP, INITIAL_MANA, LIN_INITIAL_COUNTDOWN, MAX_MANA, TARGET_HAND_SIZE } from '../game/rules'
+import { BOARD_LIMIT, CHARACTERS_PER_EVENT, DEFAULT_RULES, INITIAL_HAND_SIZE, INITIAL_HP, LIN_INITIAL_COUNTDOWN } from '../game/rules'
 import type { GameAction, GameEvent, GameState, PlayerId } from '../game/types'
 
-export const PROTOCOL = 'wen-ge-sha-p2p-6'
+export const PROTOCOL = 'wen-ge-sha-p2p-10'
 // Change the protocol when engine behavior or wire semantics change incompatibly.
-export const RULESET = JSON.stringify([characters, eventCards, EVENT_UNLOCK_TURN, LIN_INITIAL_COUNTDOWN, BOARD_LIMIT, INITIAL_HP, INITIAL_MANA, MAX_MANA, INITIAL_HAND_SIZE, TARGET_HAND_SIZE])
+export const RULESET = JSON.stringify([characters, eventCards, DEFAULT_RULES, LIN_INITIAL_COUNTDOWN, BOARD_LIMIT, INITIAL_HP, INITIAL_HAND_SIZE, CHARACTERS_PER_EVENT])
 export const HIDDEN_CARD = ''
 
 export interface OnlineFrame {
@@ -35,13 +35,11 @@ const identifier = (value: unknown): value is string => typeof value === 'string
 export function readAction(value: unknown, seat: PlayerId): GameAction | null {
   if (!isRecord(value) || value.player !== seat) return null
   switch (value.type) {
-    case 'USE_EVENT': return identifier(value.eventId) ? { type: 'USE_EVENT', player: seat, eventId: value.eventId } : null
+    case 'SELL_CARD': return identifier(value.cardId) ? { type: 'SELL_CARD', player: seat, cardId: value.cardId } : null
     case 'END_TURN': return { type: 'END_TURN', player: seat }
     case 'PLAY_CARD':
-      if (!identifier(value.cardId) || (value.targetId !== undefined && !identifier(value.targetId))) return null
-      return { type: 'PLAY_CARD', player: seat, cardId: value.cardId, ...(value.targetId === undefined ? {} : { targetId: value.targetId }) }
-    case 'SELECT_PLAY_TARGET':
-      return identifier(value.targetId) ? { type: 'SELECT_PLAY_TARGET', player: seat, targetId: value.targetId } : null
+      if (!identifier(value.cardId) || value.targetId !== undefined) return null
+      return { type: 'PLAY_CARD', player: seat, cardId: value.cardId }
     case 'ATTACK':
       if (!identifier(value.attackerId) || !isRecord(value.target)) return null
       if (value.target.type === 'player') return { type: 'ATTACK', player: seat, attackerId: value.attackerId, target: { type: 'player' } }
@@ -55,13 +53,11 @@ export function readAction(value: unknown, seat: PlayerId): GameAction | null {
 // This is a display snapshot, not input for applyAction.
 export function projectState(state: GameState, viewer: PlayerId): GameState {
   const view = structuredClone(state)
-  view.eventPool.deck.fill(HIDDEN_CARD)
   for (const player of view.players) {
     player.deck = player.deck.map(() => HIDDEN_CARD)
     if (player.id !== viewer) player.hand = player.hand.map(() => HIDDEN_CARD)
   }
   if (view.revealedHand?.viewer !== viewer) view.revealedHand = null
-  if (view.currentPlayer !== viewer) view.pendingPlayTarget = null
   return view
 }
 

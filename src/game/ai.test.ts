@@ -20,9 +20,9 @@ describe('random AI legal moves', () => {
     const state = fixture()
     const before = structuredClone(state)
     const actions = legalTurnActions(state, definitions)
-    expect(actions).toHaveLength(9)
-    expect(new Set(actions.map(action => JSON.stringify(action))).size).toBe(9)
-    expect(actions.filter(a => a.type === 'PLAY_CARD')).toHaveLength(5)
+    expect(actions).toHaveLength(11)
+    expect(new Set(actions.map(action => JSON.stringify(action))).size).toBe(11)
+    expect(actions.filter(a => a.type === 'PLAY_CARD')).toHaveLength(3)
     expect(actions.filter(a => a.type === 'ATTACK')).toHaveLength(3)
     expect(actions.at(-1)).toEqual({ type: 'END_TURN', player: 0 })
     for (const action of actions) expect(applyAction(state, action, definitions).error).toBeNull()
@@ -70,16 +70,11 @@ describe('random AI legal moves', () => {
     const next = applyAction(played, { type: 'END_TURN', player: 0 }, definitions).state
     expect(legalTurnActions(next, definitions).every(a => a.player === 1)).toBe(true)
   })
-  it('only offers entry targets while a played card awaits its target', () => {
-    const state = applyAction(fixture(), { type: 'PLAY_CARD', player: 0, cardId: 'zhang_chunqiao' }, definitions).state
-    expect(legalTurnActions(state, definitions)).toEqual([
-      { type: 'SELECT_PLAY_TARGET', player: 0, targetId: 'ready' },
-      { type: 'SELECT_PLAY_TARGET', player: 0, targetId: 'resting' },
-    ])
-    const action = chooseGreedyAction(state, definitions)!
-    const result = applyAction(state, action, definitions)
-    expect(result.error).toBeNull()
-    expect(result.state.pendingPlayTarget).toBeNull()
+  it('enumerates one automatic play per hand card without follow-up target actions', () => {
+    const state = fixture()
+    const plays = legalTurnActions(state, definitions).filter(a => a.type === 'PLAY_CARD')
+    expect(plays).toEqual(['wu_han', 'zhang_chunqiao', 'yao_wenyuan'].map(cardId => ({ type: 'PLAY_CARD', player: 0, cardId })))
+    for (const action of plays) expect(applyAction(state, action, definitions).error).toBeNull()
   })
 
   it('returns no move once the game ends, without consulting random', () => {
@@ -145,17 +140,12 @@ describe('one-step greedy decisions', () => {
     expect(chooseGreedyAction(state, definitions)).toMatchObject({ type: 'PLAY_CARD', cardId: 'wu_han' })
   })
 
-  it('selects the larger useful friendly target for BUFF_ONE', () => {
-    const state = combat('zhu_de', 'wu_han')
-    state.players[0].board[0]!.canAttack = false
-    const ready = createCharacter(definitions.kuai_dafu!, 'ready')
-    ready.canAttack = true
-    state.players[0].board.push(ready)
+  it('scores the single automatic Support outcome rather than choosing a skill target', () => {
+    const state = fixture()
     state.players[0].hand = ['zhang_chunqiao']
-    state.players[0].mana = 4
-    const resting = scoreAction(state, { type: 'PLAY_CARD', player: 0, cardId: 'zhang_chunqiao', targetId: 'attacker' }, definitions)
-    const attacking = scoreAction(state, { type: 'PLAY_CARD', player: 0, cardId: 'zhang_chunqiao', targetId: 'ready' }, definitions)
-    expect(attacking).toBeGreaterThan(resting)
+    const plays = legalTurnActions(state, definitions).filter(a => a.type === 'PLAY_CARD')
+    expect(plays).toEqual([{ type: 'PLAY_CARD', player: 0, cardId: 'zhang_chunqiao' }])
+    expect(Number.isFinite(scoreAction(state, plays[0]!, definitions))).toBe(true)
   })
 
   it('does not mutate state, consult live RNG, or change decisions with hidden cards', () => {
@@ -191,7 +181,7 @@ describe('one-step greedy decisions', () => {
   })
 })
 
-it.each(Array.from({ length: 10 }, (_, i) => ['random', 'greedy'].map(policy => ({ seed: i + 1, policy }))).flat())('$policy opponents finish seed $seed using only legal moves and preserve all 48 cards', ({ seed, policy }) => {
+it.each(Array.from({ length: 10 }, (_, i) => ['random', 'greedy'].map(policy => ({ seed: i + 1, policy }))).flat())('$policy opponents play seed $seed legally, conserve all 60 cards and reach victory or complete exhaustion', ({ seed, policy }) => {
   let value = seed
   const random = () => ((value = (Math.imul(value, 1664525) + 1013904223) >>> 0) / 4294967296)
   let state = createGame(characters, random)
@@ -200,16 +190,28 @@ it.each(Array.from({ length: 10 }, (_, i) => ['random', 'greedy'].map(policy => 
     const result = applyAction(state, action, definitions, random)
     expect(result.error, JSON.stringify(action)).toBeNull()
     state = result.state
-    const ids = state.players.flatMap(player => [...player.deck, ...player.hand, ...player.discard,
+    const ids = state.players.flatMap(player => [...player.deck, ...player.hand, ...player.discard, ...player.removed,
       ...player.board.map(c => c.definitionId), ...player.pendingReturns.map(c => c.definitionId)])
-    expect(ids).toHaveLength(48)
-    expect(new Set(ids).size).toBe(48)
+    if (state.activeEvent) ids.push(state.activeEvent.id)
+    expect(ids).toHaveLength(60)
+    expect(new Set(ids).size).toBe(60)
     for (const player of state.players) {
       expect(player.board.length).toBeLessThanOrEqual(5)
       expect(player.mana).toBeGreaterThanOrEqual(0)
-      expect(player.mana).toBeLessThanOrEqual(player.maxMana)
       expect(player.board.every(c => c.health > 0)).toBe(true)
     }
+    if (state.players.every(p => !p.hand.length && !p.deck.length && !p.board.length && !p.pendingReturns.length)) break
   }
-  expect(state.winner).not.toBeNull()
+  if (state.winner === null) {
+    // With no fatigue, selling/destroying every character can leave a genuine stalemate.
+    // Do not accept an arbitrary search/action timeout as a completed game.
+    expect(policy).toBe('random')
+    for (const player of state.players) {
+      expect(player.hand).toEqual([])
+      expect(player.deck).toEqual([])
+      expect(player.board).toEqual([])
+      expect(player.pendingReturns).toEqual([])
+    }
+    expect(legalTurnActions(state, definitions)).toEqual([{ type: 'END_TURN', player: state.currentPlayer }])
+  }
 })

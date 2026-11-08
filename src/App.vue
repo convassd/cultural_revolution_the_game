@@ -8,14 +8,15 @@ import Hand from './components/Hand.vue'
 import MatchResult from './components/MatchResult.vue'
 import OnlineLobby from './components/OnlineLobby.vue'
 import PlayerArea from './components/PlayerArea.vue'
-import EventMarket from './components/EventMarket.vue'
+import ActiveEvent from './components/ActiveEvent.vue'
+import SellSlot from './components/SellSlot.vue'
+import { HAND_DRAG_TYPE, type CardDestination } from './presentation/cardInteraction'
 import { FACTION_CLASSES } from './presentation/factions'
-import { eventDefinitions } from './data/events'
-import { characters, definitions } from './data'
+import { characters, definitions, cardDefinitions } from './data'
 import { ABILITIES } from './data/abilities'
 import { applyAction, createGame } from './game/engine'
 import { AiClient } from './ai/client'
-import { BOARD_LIMIT, EVENT_UNLOCK_TURN, canAttackPlayer } from './game/rules'
+import { BOARD_LIMIT, DEFAULT_RULES, canAttackPlayer } from './game/rules'
 import type { GameAction, GameEvent, GameState, PlayerId } from './game/types'
 import { BATTLE_EFFECT_DURATION, createBattlePresentation } from './presentation/battle'
 import type { BattleEffect } from './presentation/battle'
@@ -39,7 +40,7 @@ let online: OnlineSession | null = null
 let onlineMatchId = ''
 const selectedHand = ref<string | null>(null)
 const selectedAttacker = ref<string | null>(null)
-const selectedEvent = ref<string | null>(null)
+const draggedCard = ref<string | null>(null)
 const error = ref('')
 const showHandReveal = ref(false)
 const current = computed(() => game.value?.players[displayPlayer.value])
@@ -52,20 +53,22 @@ const aiTurn = computed(() => mode.value === 'ai' && !!game.value && game.value.
 const humanTurn = computed(() => !!game.value && game.value.currentPlayer === humanPlayer.value)
 const enabled = computed(() => humanTurn.value && game.value?.winner === null &&
   (mode.value !== 'online' || (onlineStatus.value.phase === 'playing' && onlineStatus.value.ready)))
-const pendingTarget = computed(() => humanTurn.value ? game.value?.pendingPlayTarget : null)
-const attackReady = computed(() => enabled.value && !pendingTarget.value && !!current.value?.board.find(c => c.instanceId === selectedAttacker.value)?.canAttack)
+const attackReady = computed(() => enabled.value && !!current.value?.board.find(c => c.instanceId === selectedAttacker.value)?.canAttack)
 const selectedCard = computed(() => {
-  const id = pendingTarget.value?.cardId ?? selectedHand.value
-  return id ? definitions[id] : null
+  const id = selectedHand.value
+  return id ? cardDefinitions[id] : null
 })
-const canPlay = computed(() => enabled.value && !pendingTarget.value && selectedCard.value && current.value &&
-  current.value.mana >= selectedCard.value.cost && current.value.board.length < BOARD_LIMIT)
-const selectedEventCard = computed(() => selectedEvent.value ? eventDefinitions[selectedEvent.value] : null)
-const canUseEvent = computed(() => enabled.value && !pendingTarget.value && game.value && current.value &&
-  game.value.turn >= EVENT_UNLOCK_TURN && !game.value.eventPool.usedThisTurn && selectedEventCard.value &&
-  game.value.eventPool.slots.includes(selectedEventCard.value.id) && current.value.mana >= selectedEventCard.value.cost)
+const canSell = computed(() => enabled.value && !!selectedHand.value)
+const canPlay = computed(() => enabled.value && selectedCard.value && current.value &&
+  current.value.mana >= selectedCard.value.cost && (selectedCard.value.type === 'event' || current.value.board.length < BOARD_LIMIT))
+const selectingCard = computed(() => enabled.value && !!selectedCard.value)
+const playIssue = computed(() => {
+  if (!selectedCard.value || !current.value) return ''
+  if (current.value.mana < selectedCard.value.cost) return `行动力不足：需要 ${selectedCard.value.cost}，当前 ${current.value.mana}。`
+  if (selectedCard.value.type === 'character' && current.value.board.length >= BOARD_LIMIT) return '己方场地已满（最多 5 人），仍可卖出手牌。'
+  return ''
+})
 const recentLog = computed(() => game.value ? [...game.value.log].reverse() : [])
-const legalTargets = computed(() => pendingTarget.value?.targetIds ?? [])
 const guarded = computed(() => opponent.value && !canAttackPlayer(opponent.value, definitions))
 const turnHint = computed(() => {
   if (mode.value === 'online') {
@@ -74,22 +77,22 @@ const turnHint = computed(() => {
     if (!humanTurn.value && game.value?.winner === null) return '等待对方行动；你的手牌保留显示。'
   }
   if (aiTurn.value && game.value?.winner === null) return 'AI 2.0 正在行动；你的手牌保留显示，操作暂停。'
-  if (pendingTarget.value) return selectedCard.value?.abilityId === 'BUFF_ONE'
-    ? `「${ABILITIES.BUFF_ONE.name}」：点击另一名己方角色（休息中的角色也可以）。`
-    : `「${ABILITIES.WEAKEN.name}」：点击一名敌方角色。`
-  if (selectedEventCard.value) return selectedEventCard.value.description
+  if (playIssue.value) return playIssue.value
+  if (selectedCard.value) return selectedCard.value.type === 'event'
+    ? '点击事件区域或将此牌拖入其中，打出后替换当前事件；点击左侧垃圾桶可卖出。'
+    : '点击己方任一场地位置或将此牌拖入其中；点击左侧垃圾桶可卖出。'
   if (selectedAttacker.value && !attackReady.value) return '该角色当前不能攻击。'
   if (attackReady.value) return guarded.value
     ? `敌方「${ABILITIES.GUARD.name}」在场，不能直接攻击玩家；可以攻击任意敌方角色。`
     : '选择敌方角色，或点击“攻击玩家”。'
-  return '点击手牌打出；点击己方角色攻击。'
+  return '选中手牌后点击场地、事件位或垃圾桶，也可直接拖拽；点击己方角色攻击。'
 })
 
 function clearSelection() {
   showHandReveal.value = false
   selectedHand.value = null
   selectedAttacker.value = null
-  selectedEvent.value = null
+  draggedCard.value = null
   error.value = ''
 }
 function playerName(id: PlayerId) {
@@ -223,32 +226,52 @@ function scheduleAi() {
   }, 450)
 }
 function selectHand(id: string) {
-  if (!enabled.value || pendingTarget.value) return
+  if (!enabled.value) return
+  const previous = selectedHand.value
   clearSelection()
-  selectedHand.value = id
+  selectedHand.value = previous === id ? null : id
 }
 function selectAttacker(id: string) {
   const previous = selectedAttacker.value
   clearSelection()
   selectedAttacker.value = previous === id ? null : id
 }
-function play() {
-  if (selectedEvent.value && canUseEvent.value && game.value) {
-    send({ type: 'USE_EVENT', player: game.value.currentPlayer, eventId: selectedEvent.value })
+function startHandDrag(id: string, event: DragEvent) {
+  if (!enabled.value || !current.value?.hand.includes(id) || !event.dataTransfer) { event.preventDefault(); return }
+  clearSelection()
+  selectedHand.value = id
+  draggedCard.value = id
+  event.dataTransfer.effectAllowed = 'move'
+  event.dataTransfer.setData(HAND_DRAG_TYPE, id)
+}
+function useCardAt(destination: CardDestination, event?: DragEvent) {
+  if (!enabled.value || !game.value || !selectedCard.value || !selectedHand.value || !current.value?.hand.includes(selectedHand.value)) return
+  // Only a drag begun in this hand can mutate this match. Ignore external/stale drops.
+  if (event && (!draggedCard.value || draggedCard.value !== selectedHand.value || event.dataTransfer?.getData(HAND_DRAG_TYPE) !== draggedCard.value)) return
+  draggedCard.value = null
+  if (destination.type === 'sell') {
+    send({ type: 'SELL_CARD', player: game.value.currentPlayer, cardId: selectedHand.value })
     return
   }
-  if (canPlay.value && game.value && selectedHand.value) send({ type: 'PLAY_CARD', player: game.value.currentPlayer, cardId: selectedHand.value })
+  if (destination.type === 'battlefield') {
+    if (destination.location.playerId !== displayPlayer.value) { error.value = '人物只能打到己方场地。'; return }
+    if (destination.location.slot < 1 || destination.location.slot > BOARD_LIMIT) return
+    if (selectedCard.value.type !== 'character') { error.value = '事件牌请放到右侧事件区域。'; return }
+  } else if (selectedCard.value.type !== 'event') { error.value = '人物牌请放到己方场地。'; return }
+  if (!canPlay.value) { error.value = playIssue.value; return }
+  send({ type: 'PLAY_CARD', player: game.value.currentPlayer, cardId: selectedHand.value })
 }
-function selectEvent(id: string) {
-  if (!enabled.value || pendingTarget.value) return
-  clearSelection()
-  selectedEvent.value = id
+function handType(id: string) {
+  const card = cardDefinitions[id]!
+  return card.type === 'character' ? card.faction : '事件'
+}
+function handFactionClass(id: string) {
+  const card = cardDefinitions[id]!
+  return card.type === 'character' ? FACTION_CLASSES[card.faction] : 'faction-event'
 }
 function selectBoard(id: string, friendly: boolean) {
   if (!enabled.value) return
-  if (pendingTarget.value) {
-    if (game.value && legalTargets.value.includes(id)) send({ type: 'SELECT_PLAY_TARGET', player: game.value.currentPlayer, targetId: id })
-  } else if (friendly) selectAttacker(id)
+  if (friendly) selectAttacker(id)
   else attack({ type: 'character', instanceId: id })
 }
 function attack(target: { type: 'player' } | { type: 'character'; instanceId: string }) {
@@ -263,7 +286,8 @@ function attack(target: { type: 'player' } | { type: 'character'; instanceId: st
       <div v-if="view !== 'home'" class="header-actions"><span v-if="view === 'game' && mode === 'online'" class="connection-status">{{ onlineStatus.phase === 'closed' ? '连接中断' : `${onlineStatus.isHost ? '房主' : '加入者'} · 已连接` }}</span><button v-if="view === 'game' && mode === 'ai'" @click="startGame">重新开始</button><button v-if="view === 'game' && mode === 'online' && onlineStatus.isHost && game?.winner !== null" :disabled="!onlineStatus.ready" @click="online?.rematch()">再来一局</button><button @click="exit">返回</button></div>
     </header>
     <section v-if="view === 'home'" class="welcome">
-      <h2>一张桌面，两种对战。</h2><p>48 张人物牌随机分配，行动力从 2 开始。</p>
+      <h2>一张桌面，两种对战。</h2><p>每人 24 张人物、6 张事件，均匀穿插；每回合 {{ DEFAULT_RULES.energyPerTurn }} 行动力、抽 {{ DEFAULT_RULES.drawPerTurn }} 张。</p>
+      <p v-if="DEFAULT_RULES.secondPlayerOpeningBonus">后手首回合额外 +{{ DEFAULT_RULES.secondPlayerOpeningBonus }} 行动力；双方起手 5 张，首回合不额外抽牌。</p>
       <div class="mode-options">
         <button class="mode-button" @click="openOnline"><strong>双人联机</strong><span>创建房间，分享 ID，与朋友在线对战。</span><small>双方各用自己的浏览器，随机先后手。</small></button>
         <button class="mode-button" @click="startGame"><strong>AI对战</strong><span>随机先后手，与AI 2.0 对战。</span><small>AI 2.0 规划整回合行动，并考虑对手反击。</small></button>
@@ -278,15 +302,15 @@ function attack(target: { type: 'player' } | { type: 'character'; instanceId: st
       <MatchResult v-if="game.winner !== null && effects.length === 0" :winner="game.winner" :human-player="humanPlayer" />
       <p class="orientation-hint">竖屏可左右滑动查看场牌和手牌；横屏能同时看到更多卡牌。</p>
       <p v-if="mode === 'online' && onlineStatus.phase === 'closed'" class="online-warning" role="alert">{{ onlineStatus.message }}</p>
-      <div class="game-layout">
+      <div class="game-layout" @keydown.esc="clearSelection">
         <section class="table" aria-label="对战桌面">
           <div class="battle-row enemy-row">
-            <PlayerArea :player="opponent" :label="playerName(opponent.id)" :active="game.currentPlayer === opponent.id && game.winner === null" :damage-effects="playerEffects(opponent.id)" :targetable="attackReady && !guarded && !pendingTarget" @attack="attack({ type: 'player' })" />
+            <PlayerArea :player="opponent" :label="playerName(opponent.id)" :active="game.currentPlayer === opponent.id && game.winner === null" :damage-effects="playerEffects(opponent.id)" :targetable="attackReady && !guarded" @attack="attack({ type: 'player' })" />
             <div class="battle-cards">
-              <Battlefield :board="opponent.board" :friendly="false" :selected-id="null" :enabled="enabled"
-                :effects="boardEffects(opponent.id)"
-                :targeting="attackReady || (!!pendingTarget && selectedCard?.abilityId === 'WEAKEN')"
-                :selectable-ids="pendingTarget ? (selectedCard?.abilityId === 'WEAKEN' ? legalTargets : []) : undefined"
+              <Battlefield :board="opponent.board" :player-id="opponent.id" :friendly="false" :selected-id="null" :enabled="enabled"
+                :active-event="game.activeEvent?.id" :effects="boardEffects(opponent.id)"
+                :targeting="attackReady" :selecting="selectingCard" :dragging="!!draggedCard"
+                @place="(location, event) => useCardAt({ type: 'battlefield', location }, event)"
                 @select="id => selectBoard(id, false)" />
             </div>
           </div>
@@ -296,42 +320,37 @@ function attack(target: { type: 'player' } | { type: 'character'; instanceId: st
               <div class="hidden-hand" :class="{ revealed: !!handReveal }" :aria-label="`对方手牌 ${opponent.hand.length} 张`">
                 <div class="opponent-hand-cards" :role="handReveal ? 'status' : undefined">
                   <template v-if="handReveal">
-                    <span v-for="id in handReveal.cards" :key="id" class="revealed-card-name" :class="FACTION_CLASSES[definitions[id]!.faction]" :title="definitions[id]!.faction">{{ definitions[id]!.name }}</span>
+                    <span v-for="id in handReveal.cards" :key="id" class="revealed-card-name" :class="handFactionClass(id)" :title="handType(id)">{{ cardDefinitions[id]!.name }}</span>
                     <span v-if="handReveal.cards.length === 0" class="revealed-card-name">无手牌</span>
                   </template>
                   <template v-else><span v-for="n in Math.min(opponent.hand.length, 12)" :key="n" class="card-back">◆</span></template>
                 </div>
                 <small><template v-if="handReveal">「{{ ABILITIES.REVEAL_HAND.name }}」 · </template>对方手牌 · {{ opponent.hand.length }} 张</small>
               </div>
-              <p v-if="!handReveal" class="turn-hint" :title="turnHint">{{ turnHint }}</p>
+              <p v-if="!handReveal || error" class="turn-hint" :class="{ error: !!error || !!playIssue }" :role="error ? 'alert' : undefined" :title="error || turnHint">{{ error || turnHint }}</p>
             </div>
           </div>
           <div class="battle-row friendly-row">
             <PlayerArea :player="current" :label="playerName(current.id)" :active="game.currentPlayer === current.id && game.winner === null" :damage-effects="playerEffects(current.id)" />
             <div class="battle-cards">
-              <Battlefield :board="current.board" :friendly="true" :selected-id="selectedAttacker" :enabled="enabled"
-                :effects="boardEffects(current.id)"
-                :targeting="!!pendingTarget && selectedCard?.abilityId === 'BUFF_ONE'"
-                :selectable-ids="pendingTarget ? (selectedCard?.abilityId === 'BUFF_ONE' ? legalTargets : []) : undefined"
+              <Battlefield :board="current.board" :player-id="current.id" :friendly="true" :selected-id="selectedAttacker" :enabled="enabled"
+                :active-event="game.activeEvent?.id" :effects="boardEffects(current.id)"
+                :selecting="selectingCard" :accepted="!!canPlay && selectedCard?.type === 'character'" :dragging="!!draggedCard"
+                @place="(location, event) => useCardAt({ type: 'battlefield', location }, event)"
                 @select="id => selectBoard(id, true)" />
             </div>
           </div>
-          <EventMarket :pool="game.eventPool" :turn="game.turn" :selected-id="selectedEvent" :enabled="enabled && !pendingTarget" @select="selectEvent" />
+          <ActiveEvent :event="game.activeEvent" :selecting="selectingCard" :accepted="!!canPlay && selectedCard?.type === 'event'" :dragging="!!draggedCard"
+            @use="useCardAt({ type: 'event' })" @drop="event => useCardAt({ type: 'event' }, event)" />
         </section>
         <section class="hand-zone" aria-label="手牌与回合操作">
-          <Hand :cards="current.hand" :selected-id="selectedHand" :enabled="enabled && !pendingTarget" @select="selectHand" />
+          <SellSlot :enabled="canSell" :gain="selectedCard?.cost ?? null" :dragging="!!draggedCard"
+            @use="useCardAt({ type: 'sell' })" @drop="event => useCardAt({ type: 'sell' }, event)" />
+          <Hand :cards="current.hand" :selected-id="selectedHand" :enabled="enabled" :aria-label="`${playerName(current.id)} 的手牌`" @select="selectHand"
+            @drag-start="startHandDrag" @drag-end="draggedCard = null" />
           <div class="turn-actions">
-            <div class="play-controls">
-              <div class="play-info"><b v-if="selectedEventCard" :title="`${selectedEventCard.name} · 费用 ${selectedEventCard.cost}`">{{ selectedEventCard.name }} · 费用 {{ selectedEventCard.cost }}</b><b v-else-if="selectedCard" :title="`${selectedCard.name} · 费用 ${selectedCard.cost}`">{{ selectedCard.name }} · 费用 {{ selectedCard.cost }}</b><b v-else :title="`${playerName(current.id)} 的手牌`">{{ playerName(current.id) }} 的手牌</b><span>行动力 {{ current.mana }} / {{ current.maxMana }}</span></div>
-              <button :disabled="selectedEventCard ? !canUseEvent : !canPlay" @click="play">{{ selectedEventCard ? '使用事件' : '打出人物' }}</button>
-            </div>
-            <div v-if="pendingTarget || error || (selectedCard && !canPlay) || selectedEventCard" class="action-feedback">
-              <p v-if="pendingTarget" class="target-prompt" role="status">{{ turnHint }} 人物已登场并支付费用，请完成目标选择。</p>
-              <p v-else-if="selectedCard && !canPlay" class="muted selection-hint">{{ current.board.length >= BOARD_LIMIT ? '场地已满（最多 5 人）' : `行动力不足：需要 ${selectedCard.cost}` }}</p>
-              <p v-else-if="selectedEventCard" class="muted selection-hint">{{ game.eventPool.usedThisTurn ? '本回合已使用事件' : !canUseEvent ? '行动力不足' : selectedEventCard.description }}</p>
-              <p v-if="error" class="error" role="alert">{{ error }}</p>
-            </div>
-            <button :disabled="!enabled || !!pendingTarget" class="primary-button end-turn-button" @click="send({ type: 'END_TURN', player: game.currentPlayer })">结束回合</button>
+            <div class="energy-info" aria-label="当前行动力"><span>行动力</span><b>{{ current.mana }}</b><small>基础 {{ current.maxMana }}</small></div>
+            <button :disabled="!enabled" class="primary-button end-turn-button" @click="send({ type: 'END_TURN', player: game.currentPlayer })">结束回合</button>
           </div>
         </section>
         <aside class="sidebar"><section><h2>对局记录</h2><ol class="game-log" aria-live="polite"><li v-for="(message, index) in recentLog" :key="`${game.turn}-${index}`">{{ message }}</li></ol></section></aside>

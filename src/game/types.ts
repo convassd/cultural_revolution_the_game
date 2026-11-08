@@ -9,7 +9,6 @@ export interface EventDefinition {
   id: EventId
   name: string
   cost: number
-  scope: '全局' | '己方'
   description: string
   image: string
 }
@@ -61,12 +60,20 @@ export interface PlayerState {
   hand: string[]
   board: CharacterInstance[]
   discard: string[]
+  removed: string[]
   pendingReturns: CharacterInstance[]
   mediationUsed: boolean
 }
 
+export interface GameRules {
+  energyPerTurn: number
+  drawPerTurn: number
+  secondPlayerOpeningBonus?: number
+}
+
 export interface GameState {
-  eventPool: { deck: string[]; slots: [string | null, string | null]; discard: string[]; usedThisTurn: boolean }
+  rules: GameRules
+  activeEvent: { id: EventId; owner: PlayerId } | null
   players: [PlayerState, PlayerState]
   currentPlayer: PlayerId
   // One turn per player action phase; round number is Math.ceil(turn / 2).
@@ -75,13 +82,11 @@ export interface GameState {
   nextInstanceId: number
   revealedHand: { viewer: PlayerId; owner: PlayerId; cards: string[] } | null
   log: string[]
-  pendingPlayTarget: { cardId: string; targetIds: string[] } | null
 }
 
 export type GameAction =
-  | { type: 'USE_EVENT'; player: PlayerId; eventId: string }
-  | { type: 'PLAY_CARD'; player: PlayerId; cardId: string; targetId?: string }
-  | { type: 'SELECT_PLAY_TARGET'; player: PlayerId; targetId: string }
+  | { type: 'SELL_CARD'; player: PlayerId; cardId: string }
+  | { type: 'PLAY_CARD'; player: PlayerId; cardId: string }
   | { type: 'ATTACK'; player: PlayerId; attackerId: string;
       target: { type: 'player' } | { type: 'character'; instanceId: string } }
   | { type: 'END_TURN'; player: PlayerId }

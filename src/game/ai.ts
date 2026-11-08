@@ -1,30 +1,20 @@
 import { applyAction } from './engine'
 import { eventDefinitions } from '../data/events'
 import type { Definitions, RandomSource } from './engine'
-import { BOARD_LIMIT, EVENT_UNLOCK_TURN, canAttackPlayer, effectiveAttack, LIN_INITIAL_COUNTDOWN, playTargets } from './rules'
-import type { GameAction, GameState, PlayerId, PlayerState } from './types'
+import { BOARD_LIMIT, canAttackPlayer, effectiveAttack, LIN_INITIAL_COUNTDOWN } from './rules'
+import type { GameAction, GameState, PlayerId, PlayerState, EventId } from './types'
 
 export function legalTurnActions(state: GameState, definitions: Definitions): GameAction[] {
   if (state.winner !== null) return []
-  if (state.pendingPlayTarget) return state.pendingPlayTarget.targetIds.map(targetId =>
-    ({ type: 'SELECT_PLAY_TARGET', player: state.currentPlayer, targetId }))
   const player = state.players[state.currentPlayer]
   const enemy = state.players[state.currentPlayer === 0 ? 1 : 0]
   const actions: GameAction[] = []
-  if (state.turn >= EVENT_UNLOCK_TURN && !state.eventPool.usedThisTurn) {
-    for (const eventId of state.eventPool.slots) {
-      if (eventId && eventDefinitions[eventId]!.cost <= player.mana) actions.push({ type: 'USE_EVENT', player: player.id, eventId })
-    }
-  }
-  if (player.board.length < BOARD_LIMIT) {
-    for (const cardId of player.hand) {
-      const card = definitions[cardId]
-      if (!card || card.cost > player.mana) continue
-      const targets = playTargets(card, player, enemy)
-      if (targets.length) {
-        for (const targetId of targets) actions.push({ type: 'PLAY_CARD', player: player.id, cardId, targetId })
-      } else actions.push({ type: 'PLAY_CARD', player: player.id, cardId })
-    }
+  for (const cardId of player.hand) {
+    const card = definitions[cardId] ?? eventDefinitions[cardId]
+    if (!card) continue
+    actions.push({ type: 'SELL_CARD', player: player.id, cardId })
+    if (card.cost > player.mana || (card.type === 'character' && player.board.length >= BOARD_LIMIT)) continue
+    actions.push({ type: 'PLAY_CARD', player: player.id, cardId })
   }
   for (const character of player.board) {
     if (!character.canAttack) continue
@@ -45,15 +35,15 @@ export function chooseRandomAction(state: GameState, definitions: Definitions, r
   return actions.length ? actions[Math.floor(random() * actions.length)]! : null
 }
 
-function attackPower(player: PlayerState, definitions: Definitions, readyOnly = false): number {
-  return player.board.reduce((total, c) => total + (readyOnly && !c.canAttack ? 0 : effectiveAttack(c, player.board, definitions)), 0)
+function attackPower(player: PlayerState, definitions: Definitions, readyOnly = false, event: EventId | null = null): number {
+  return player.board.reduce((total, c) => total + (readyOnly && !c.canAttack ? 0 : effectiveAttack(c, player.board, definitions, event)), 0)
 }
 
-function boardValue(player: PlayerState, enemy: PlayerState, definitions: Definitions): number {
+function boardValue(player: PlayerState, enemy: PlayerState, definitions: Definitions, event: EventId | null): number {
   let value = 0
   for (const character of player.board) {
     const card = definitions[character.definitionId]!
-    let attack = effectiveAttack(character, player.board, definitions)
+    let attack = effectiveAttack(character, player.board, definitions, event)
     if (card.abilityId === 'MAO_RANDOM_COMMAND') attack *= 0.5
     if (card.abilityId === 'LIN_COUNTDOWN') attack *= (character.countdown ?? LIN_INITIAL_COUNTDOWN) <= 1 ? 0.45 : 0.8
     value += 1.5 + attack * 1.2 + Math.sqrt(character.health)
@@ -64,7 +54,7 @@ function boardValue(player: PlayerState, enemy: PlayerState, definitions: Defini
   // GUARD is worth more when there is actual damage to block; multiple guards do not stack.
   const guards = player.board.filter(c => definitions[c.definitionId]!.abilityId === 'GUARD')
   const guardHealth = guards.reduce((best, c) => Math.max(best, c.health / definitions[c.definitionId]!.health), 0)
-  value += guardHealth * (2 + Math.min(12, attackPower(enemy, definitions) * 0.9))
+  value += guardHealth * (2 + Math.min(12, attackPower(enemy, definitions, false, event) * 0.9))
   value += player.pendingReturns.reduce((total, c) => total + 1 + (c.attackOverride ?? 1) * 0.7, 0)
   return value
 }
@@ -73,25 +63,25 @@ export function positionScore(state: GameState, perspective: PlayerId, definitio
   if (state.winner !== null) return state.winner === perspective ? 1_000_000 : -1_000_000
   const player = state.players[perspective]
   const enemy = state.players[perspective === 0 ? 1 : 0]
-  const readyDamage = state.currentPlayer === perspective ? attackPower(player, definitions, true) : 0
+  const readyDamage = state.currentPlayer === perspective ? attackPower(player, definitions, true, state.activeEvent?.id) : 0
   const canFinish = canAttackPlayer(enemy, definitions) && readyDamage >= enemy.hp
-  const enemyDamage = canAttackPlayer(player, definitions) ? attackPower(enemy, definitions) : 0
+  const enemyDamage = canAttackPlayer(player, definitions) ? attackPower(enemy, definitions, false, state.activeEvent?.id) : 0
   const danger = Math.max(0, enemyDamage - player.hp + 1)
   // These are static board estimates, not a searched opponent reply or future draw.
   let score = player.hp * 1.2 - enemy.hp * 1.6
-    + boardValue(player, enemy, definitions) - boardValue(enemy, player, definitions)
+    + boardValue(player, enemy, definitions, state.activeEvent?.id ?? null) - boardValue(enemy, player, definitions, state.activeEvent?.id ?? null)
     + player.hand.length * 1.4 - enemy.hand.length * 1.4
     + player.mana * 0.2 + readyDamage * 0.35
-  const outgoing = canAttackPlayer(enemy, definitions) ? attackPower(player, definitions) : 0
+  const outgoing = canAttackPlayer(enemy, definitions) ? attackPower(player, definitions, false, state.activeEvent?.id) : 0
   score += 20 * (outgoing / (enemy.hp + 2) - enemyDamage / (player.hp + 2))
   if (!canFinish) score -= 30 * (enemyDamage / Math.max(1, player.hp)) ** 2
   // Value leftover usable mana without searching a second move or inspecting a future draw.
   if (state.currentPlayer === perspective && player.board.length < BOARD_LIMIT) {
     let usableHand = 0
     for (const id of player.hand) {
-      const card = definitions[id]!
-      if (knownHand.has(id) && card.cost <= player.mana) {
-        usableHand = Math.max(usableHand, 1.5 + card.attack * 1.2 + Math.sqrt(card.health))
+      const card = definitions[id] ?? eventDefinitions[id]
+      if (card && knownHand.has(id) && card.cost <= player.mana) {
+        usableHand = Math.max(usableHand, card.type === 'character' ? 1.5 + card.attack * 1.2 + Math.sqrt(card.health) : 1.5)
       }
     }
     score += usableHand * 0.7

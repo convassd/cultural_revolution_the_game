@@ -1,5 +1,5 @@
 import { BOARD_LIMIT, effectiveAttack, effectiveFaction } from '../game/rules'
-import type { CharacterDefinition, CharacterInstance, Faction, GameEvent, GameState, PlayerId } from '../game/types'
+import type { CharacterDefinition, CharacterInstance, Faction, GameEvent, GameState, PlayerId, EventId } from '../game/types'
 
 export const BATTLE_EFFECT_DURATION = 1800
 
@@ -19,8 +19,8 @@ export interface BattleEffect extends BattlePresentation { id: number }
 export interface BoardEffect { id: number; slots: Array<PresentedCharacter | null> }
 type Definitions = Readonly<Record<string, CharacterDefinition>>
 
-export function presentCharacter(character: CharacterInstance, board: readonly CharacterInstance[], definitions: Definitions): PresentedCharacter {
-  return { character, attack: effectiveAttack(character, board, definitions), faction: effectiveFaction(character, definitions),
+export function presentCharacter(character: CharacterInstance, board: readonly CharacterInstance[], definitions: Definitions, event: EventId | null = null): PresentedCharacter {
+  return { character, attack: effectiveAttack(character, board, definitions, event), faction: effectiveFaction(character, definitions),
     damage: null, dying: false, returned: false }
 }
 
@@ -47,7 +47,7 @@ export function createBattlePresentation(
       const alive = newBoard.find(c => c.instanceId === character.instanceId)
       const death = deaths.get(character.instanceId)
       const source = alive ?? death?.character ?? character
-      const result = presentCharacter(source, alive ? newBoard : oldBoard, definitions)
+      const result = presentCharacter(source, alive ? newBoard : oldBoard, definitions, alive ? after.activeEvent?.id : before.activeEvent?.id)
       result.damage = damage.get(character.instanceId) ?? null
       result.dying = !!death && !alive
       result.returned = returned.has(character.instanceId) && !!alive
